@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+repository = "https://github.com/epicosy/osv-reproducer"
+homepage = "https://github.com/epicosy/osv-reproducer"
+
+[project]
+name = "osv-reproducer"
+version = "0.0.1"
+description = "A reproducer component that can compile OSS-Fuzz projects at specific versions and run test cases"
+readme = "README.md"
+authors = [
+    {name = "Eduard Pinconschi", email="eduard.pinconschi@tecnico.ulisboa.pt"},
+]
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "osv-utils>=0.3.10",
+    "docker>=7.1.0",
+    "click>=8.2.1",
+    "google-cloud-storage>=2.18.2",
+    "github_lib>=0.8.2",
+    "cement>=3.0.14",
+    "Jinja2>=3.1.6",
+    "PyYAML>=6.0.2",
+    "colorlog>=6.9.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "coverage",
+    "isort",
+    "mypy",
+    "flake8",
+    "twine"
+]
+
+[project.scripts]
+osv-reproducer = "osv_reproducer.main:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+exclude = ["ez_setup", "tests*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
