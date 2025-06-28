@@ -1,69 +1,67 @@
-# A reproducer component that can compile OSS-Fuzz projects at specific versions and run test cases
+# OSV Reproducer
+
+A Python package for reproducing OSS-Fuzz bugs listed by OSV (Open Source Vulnerabilities) as vulnerabilities.
+
+## Description
+
+OSV Reproducer is a tool that helps security researchers and developers reproduce vulnerabilities reported in the OSV database. It provides a simple CLI that takes an OSV-ID, fetches the vulnerability data, and reproduces the bug in a containerized environment.
+
+The tool automates the following workflow:
+
+1. Fetch OSV record by ID
+2. Extract metadata (project name, vulnerable commit, fixed commit, etc.)
+3. Retrieve OSS-Fuzz artifacts
+4. Prepare versioned environment
+5. Build and verify the vulnerable version
+6. Build and verify the fixed version
+7. Generate a differential report
 
 ## Installation
 
-```
-$ pip install -r requirements.txt
-
-$ python setup.py install
+```bash
+pip install osv-reproducer
 ```
 
-## Development
+## Usage
 
-This project includes a number of helpers in the `Makefile` to streamline common development tasks.
+### Basic Usage
 
-### Environment Setup
-
-The following demonstrates setting up and working with a development environment:
-
-```
-### create a virtualenv for development
-
-$ make virtualenv
-
-$ source env/bin/activate
-
-
-### run osv_reproducer cli application
-
-$ osv_reproducer --help
-
-
-### run pytest / coverage
-
-$ make test
+```bash
+osv-reproducer reproduce OSV-2023-XXXX
 ```
 
+### Options
 
-### Releasing to PyPi
+```bash
+# Specify output directory for artifacts
+osv-reproducer reproduce OSV-2023-XXXX --output-dir ./results
 
-Before releasing to PyPi, you must configure your login credentials:
+# Keep Docker containers after reproduction
+osv-reproducer reproduce OSV-2023-XXXX --keep-containers
 
-**~/.pypirc**:
-
-```
-[pypi]
-username = YOUR_USERNAME
-password = YOUR_PASSWORD
-```
-
-Then use the included helper function via the `Makefile`:
-
-```
-$ make dist
-
-$ make dist-upload
+# Verbose output
+osv-reproducer reproduce OSV-2023-XXXX --verbose
 ```
 
-## Deployments
-
-### Docker
-
-Included is a basic `Dockerfile` for building and distributing `OSV Reproducer`,
-and can be built with the included `make` helper:
+## Workflow
 
 ```
-$ make docker
-
-$ docker run -it osv_reproducer --help
+graph TD
+    A[Input: OSV-ID] --> B[Fetch OSV Record]
+    B --> C[Extract Metadata]
+    C --> D[Retrieve OSS-Fuzz Artifacts]
+    D --> E[Prepare Versioned Environment]
+    E --> F[Build & Verify Vulnerable Version]
+    F --> G[Build & Verify Fixed Version]
+    G --> H[Generate Differential Report]
 ```
+
+## Requirements
+
+- Python 3.8+
+- Docker
+- Internet connection (to access OSV database, GitHub, and Google Cloud Storage)
+
+## License
+
+Apache License 2.0
