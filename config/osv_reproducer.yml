@@ -2,7 +2,6 @@
 ---
 
 osv_reproducer:
-
 ### Toggle application level debug (does not toggle framework debugging)
 # debug: false
 
@@ -16,27 +15,27 @@ osv_reproducer:
 # template_dir: /var/lib/osv_reproducer/templates/
 
 ### The log handler label
-# log_handler: colorlog
+  log_handler: colorlog
 
 ### The output handler label
 # output_handler: jinja2
 
-### sample foo option
-# foo: bar
+tokens:
+  github: "<YOUR_TOKEN_HERE>"
 
 
 log.colorlog:
 
 ### Where the log file lives (no log file by default)
-# file: null
+  file: null
 
 ### The level for which to log.  One of: info, warning, error, fatal, debug
-# level: info
+  level: info
 
-### Whether or not to log to console
-# to_console: true
+### Whether to log to console
+  to_console: true
 
-### Whether or not to rotate the log file when it reaches `max_bytes`
+### Whether to rotate the log file when it reaches `max_bytes`
 # rotate: false
 
 ### Max size in bytes that a log file can grow until it is rotated.

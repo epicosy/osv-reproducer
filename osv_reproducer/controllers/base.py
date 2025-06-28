@@ -1,10 +1,9 @@
-
 from cement import Controller, ex
 from cement.utils.version import get_version_banner
 from ..core.version import get_version
 
 VERSION_BANNER = """
-A reproducer component that can compile OSS-Fuzz projects at specific versions and run test cases %s
+Tooling for reproducing OSS-Fuzz bugs from OSV database %s
 %s
 """ % (get_version(), get_version_banner())
 
@@ -17,7 +16,7 @@ class Base(Controller):
         description = 'A reproducer component that can compile OSS-Fuzz projects at specific versions and run test cases'
 
         # text displayed at the bottom of --help output
-        epilog = 'Usage: osv_reproducer command1 --foo bar'
+        epilog = 'Usage: osv_reproducer'
 
         # controller level arguments. ex: 'osv_reproducer --version'
         arguments = [
@@ -27,34 +26,34 @@ class Base(Controller):
                 'version' : VERSION_BANNER } ),
         ]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._github_handler = None
+
+    @property
+    def github_handler(self):
+        if self._github_handler is None:
+            self._github_handler = self.app.handler.get("handlers", "github", setup=True)
+
+        return self._github_handler
 
     def _default(self):
         """Default action if no sub-command is passed."""
-
         self.app.args.print_help()
 
-
     @ex(
-        help='example sub command1',
-
-        # sub-command level arguments. ex: 'osv_reproducer command1 --foo bar'
+        help='Initialize OSV Reproducer by fetching OSS-Fuzz project data',
         arguments=[
-            ### add a sample foo option under subcommand namespace
-            ( [ '-f', '--foo' ],
-              { 'help' : 'notorious foo option',
-                'action'  : 'store',
-                'dest' : 'foo' } ),
-        ],
+        ]
     )
-    def command1(self):
-        """Example sub-command."""
+    def init(self):
+        """
+            This command fetches information for each OSS-Fuzz project and saves it under ~/.osv-reproducer.
+            It also fetches and saves the build.sh and Dockerfile for each project.
+        """
+        #try:
+        self.app.log.info("Fetching OSS-Fuzz project data...")
 
-        data = {
-            'foo' : 'bar',
-        }
-
-        ### do something with arguments
-        if self.app.pargs.foo is not None:
-            data['foo'] = self.app.pargs.foo
-
-        self.app.render(data, 'command1.jinja2')
+        # Fetch OSS-Fuzz projects data
+        projects = self.github_handler.get_oss_fuzz_projects()
+        print(projects)

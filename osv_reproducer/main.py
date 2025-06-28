@@ -1,12 +1,11 @@
 
-from cement import App, TestApp, init_defaults
+from gitlib.common.exceptions import GitLibException
+from cement import App, TestApp
 from cement.core.exc import CaughtSignal
 from .core.exc import OSVReproducerError
 from .controllers.base import Base
-
-# configuration defaults
-CONFIG = init_defaults('osv_reproducer')
-CONFIG['osv_reproducer']['foo'] = 'bar'
+from .core.interfaces import HandlersInterface
+from .handlers.github import GithubHandler
 
 
 class OSVReproducer(App):
@@ -14,9 +13,6 @@ class OSVReproducer(App):
 
     class Meta:
         label = 'osv_reproducer'
-
-        # configuration defaults
-        config_defaults = CONFIG
 
         # call sys.exit() on close
         exit_on_close = True
@@ -42,7 +38,11 @@ class OSVReproducer(App):
 
         # register handlers
         handlers = [
-            Base
+            Base, GithubHandler
+        ]
+
+        interfaces = [
+            HandlersInterface
         ]
 
 
@@ -74,10 +74,17 @@ def main():
                 import traceback
                 traceback.print_exc()
 
-        except CaughtSignal as e:
+        except GitLibException as e:
+            print('GitLibError > %s' % e.args[0])
+            app.exit_code = 1
+            if app.debug is True:
+                import traceback
+                traceback.print_exc()
+
+        #except CaughtSignal as e:
             # Default Cement signals are SIGINT and SIGTERM, exit 0 (non-error)
-            print('\n%s' % e)
-            app.exit_code = 0
+        #    print('\n%s' % e)
+        #    app.exit_code = 0
 
 
 if __name__ == '__main__':
