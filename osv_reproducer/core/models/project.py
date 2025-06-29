@@ -12,7 +12,7 @@ class ProjectInfo(BaseModel):
     homepage: Optional[str] = Field(None)
     primary_contact: Optional[str] = Field(None)
     fuzzing_engines: Optional[List[str]] = Field(default_factory=list)
-    sanitizers: Optional[List[str]] = Field(default_factory=list)
+    sanitizers: Optional[List[str|dict]] = Field(default_factory=list)
     vendor_ccs: Optional[List[str]] = Field(default_factory=list)
     auto_ccs: Optional[List[str]] = Field(default_factory=list)
     file_github_issue: Optional[bool] = Field(default=None)

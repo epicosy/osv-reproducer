@@ -1,3 +1,4 @@
+from pathlib import Path
 
 from gitlib.common.exceptions import GitLibException
 from cement import App, TestApp
@@ -6,6 +7,7 @@ from .core.exc import OSVReproducerError
 from .controllers.base import Base
 from .core.interfaces import HandlersInterface
 from .handlers.github import GithubHandler
+from .handlers.project import ProjectHandler
 
 
 class OSVReproducer(App):
@@ -38,12 +40,21 @@ class OSVReproducer(App):
 
         # register handlers
         handlers = [
-            Base, GithubHandler
+            Base, GithubHandler, ProjectHandler
         ]
 
         interfaces = [
             HandlersInterface
         ]
+
+    @property
+    def projects_dir(self):
+        """
+            Return the path to the projects folder.
+        """
+        projects_dir = Path.home() / ".osv_reproducer" / "projects"
+        projects_dir.mkdir(exist_ok=True, parents=True)
+        return projects_dir
 
 
 class OSVReproducerTest(TestApp,OSVReproducer):
