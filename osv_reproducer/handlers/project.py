@@ -19,8 +19,8 @@ class ProjectHandler(GithubHandler):
     class Meta:
         label = 'project'
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def _setup(self, app):
+        super()._setup(app)
 
     def _load_existing_project_info(self, project_info_path: Path) -> Optional[ProjectInfo]:
         """Load existing project info from a JSON file."""
@@ -170,5 +170,16 @@ class ProjectHandler(GithubHandler):
         if self._save_project_files(oss_fuzz_repo, project_git_path, project_dir, oss_fuzz_ref):
             # Create ProjectInfo object
             return ProjectInfo(**project_info_dict)
+
+        return None
+
+    def get_project_info_by_id(self, repo_id: int) -> Optional[ProjectInfo]:
+        # TODO: check also if the project is in the oss-fuzz repo and fetch
+        self.app.log.info(f"Looking up for project with {repo_id} repo_id...")
+        for project_path in self.app.projects_dir.iterdir():
+            project_info = self._load_existing_project_info(project_path / "project.json")
+
+            if project_info and project_info.main_repo_id == repo_id:
+                return project_info
 
         return None

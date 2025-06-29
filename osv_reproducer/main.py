@@ -1,11 +1,16 @@
 from pathlib import Path
 
 from gitlib.common.exceptions import GitLibException
+
 from cement import App, TestApp
 from cement.core.exc import CaughtSignal
+
 from .core.exc import OSVReproducerError
 from .controllers.base import Base
 from .core.interfaces import HandlersInterface
+
+from .handlers.osv import OSVHandler
+from .handlers.build import BuildHandler
 from .handlers.github import GithubHandler
 from .handlers.project import ProjectHandler
 
@@ -40,7 +45,7 @@ class OSVReproducer(App):
 
         # register handlers
         handlers = [
-            Base, GithubHandler, ProjectHandler
+            Base, GithubHandler, ProjectHandler, OSVHandler, BuildHandler
         ]
 
         interfaces = [
