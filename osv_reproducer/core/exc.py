@@ -22,3 +22,8 @@ class BuildError(Exception):
 class GCSError(Exception):
     """Generic errors."""
     pass
+
+
+class DockerError(Exception):
+    """Generic errors."""
+    pass

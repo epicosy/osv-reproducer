@@ -1,4 +1,6 @@
 import json
+import shutil
+
 import yaml
 
 from pathlib import Path
@@ -108,25 +110,34 @@ class ProjectHandler(GithubHandler):
             self.app.log.error(f"Error saving project files: {e}")
             return False
 
-    def get_oss_fuzz_project(self, oss_fuzz_repo: Any, project_content_file: Any, oss_fuzz_ref: str) -> Optional[ProjectInfo]:
+    def init(self, project_info: ProjectInfo, output_dir: Path):
+        src_dir = output_dir / "src"
+        src_dir.mkdir(exist_ok=True, parents=True)
+        build_file_path = self.app.projects_dir / project_info.name / "build.sh"
+
+        if build_file_path.exists():
+            # copy the file to the src_dir
+            shutil.copy(build_file_path, src_dir)
+
+    def get_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str, oss_fuzz_ref: str) -> Optional[ProjectInfo]:
         """
         Process a single OSS-Fuzz project.
 
         Args:
             oss_fuzz_repo: The OSS-Fuzz repository object.
-            project_content_file: The project content file object.
+            project_git_path: The path to the project in the GitHub repository.
             oss_fuzz_ref: The OSS-Fuzz reference (branch, tag, or commit).
 
         Returns:
             A ProjectInfo object if successful, None otherwise.
         """
-        project_git_path = project_content_file.path
         project_name = project_git_path.split("/")[-1]
         project_dir = self.app.projects_dir / project_name
         project_info_path = project_dir / "project.json"
 
         # Check if project info already exists
         existing_project_info = self._load_existing_project_info(project_info_path)
+
         if existing_project_info:
             self.app.log.info(f"Loading project {project_name}")
             return existing_project_info
@@ -153,11 +164,12 @@ class ProjectHandler(GithubHandler):
             self.app.log.warning(f"Skipping {project_name}; not a repository hosted on GitHub")
             return None
 
-        if "language" not in project_info_dict and project_repo.language:
-            project_info_dict["language"] = project_repo.language
-        else:
-            self.app.log.error(f"Could not determine language for {project_name}")
-            return None
+        if "language" not in project_info_dict:
+            if project_repo.language:
+                project_info_dict["language"] = project_repo.language
+            else:
+                self.app.log.error(f"Could not determine language for {project_name}")
+                return None
 
         # Update project info with repository details
         project_info_dict["repo_path"] = repo_path
@@ -181,5 +193,14 @@ class ProjectHandler(GithubHandler):
 
             if project_info and project_info.main_repo_id == repo_id:
                 return project_info
+
+        return None
+
+    def get_project_info_by_name(self, name: str) -> Optional[ProjectInfo]:
+        # TODO: check also if the project is in the oss-fuzz repo and fetch
+        project_info = self._load_existing_project_info(self.app.projects_dir / name / "project.json")
+
+        if project_info:
+            return project_info
 
         return None

@@ -1,15 +1,16 @@
 import requests
 
 from cement import Handler
-from typing import Dict, Tuple
+from typing import Tuple
+from pydantic import HttpUrl
 
 from osvutils.types.osv import OSV
 from osvutils.types.range import GitRange
 from osvutils.types.event import Introduced, Fixed
 
+from ..common.constants import HTTP_HEADERS
 from ..core.exc import OSVError
 from ..core.interfaces import HandlersInterface
-
 
 class OSVHandler(HandlersInterface, Handler):
     """
@@ -23,24 +24,15 @@ class OSVHandler(HandlersInterface, Handler):
         super()._setup(app)
         # TODO: should be passed through configs
         self.version: str = 'v1'
-        self.host: str = 'https://api.osv.dev'
+        self.base_api_url = HttpUrl('https://api.osv.dev')
 
     @property
-    def base_api_url(self) -> str:
-        return self.host + '/' + self.version
+    def api_url(self) -> HttpUrl:
+        return HttpUrl(f"{self.base_api_url}/{self.version}")
 
     @property
-    def vuln_api_url(self) -> str:
-        return self.base_api_url + '/vulns'
-
-    @property
-    def headers(self) -> Dict[str, str]:
-        # TODO: User-Agent should be dynamic
-        return {
-            'Accept': 'application/json',
-            'Content-type': 'application/json',
-            'User-Agent': f'osv-reproducer/0.0.1 Python/3.10'
-        }
+    def vuln_api_url(self) -> HttpUrl:
+        return HttpUrl(f"{self.api_url}/vulns")
 
     def fetch_vulnerability(self, osv_id: str) -> OSV:
         """
@@ -58,9 +50,7 @@ class OSVHandler(HandlersInterface, Handler):
         try:
             self.app.log.info(f"Fetching vulnerability {osv_id} from OSV API")
 
-            response = requests.get(
-                url=f"{self.vuln_api_url}/{osv_id}", headers=self.headers
-            )
+            response = requests.get(url=f"{self.vuln_api_url}/{osv_id}", headers=HTTP_HEADERS)
 
             if not response.status_code == 200:
                 raise ValueError(

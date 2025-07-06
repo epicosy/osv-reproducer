@@ -1,22 +1,26 @@
-import os
-import json
-import tempfile
-
 from pathlib import Path
-from cement import Handler
-from typing import Optional
-from google.cloud import storage
-from google.cloud.exceptions import GoogleCloudError, NotFound
 
-from ..core.exc import BuildError, GCSError
-from ..core.models.build import BuildInfo
+from ..core.exc import BuildError, DockerError
 from ..core.models.project import ProjectInfo
-from ..core.interfaces import HandlersInterface
+from ..core.models.report import OSSFuzzIssueReport
+from ..handlers.docker import DockerHandler
 
 
-class BuildHandler(HandlersInterface, Handler):
+# TODO: probably belongs in the config
+LANGUAGE_IMAGE_MAP = {
+    "c++": "gcr.io/oss-fuzz-base/base-builder",
+    "c": "gcr.io/oss-fuzz-base/base-builder",
+    "go": "gcr.io/oss-fuzz-base/base-builder-go",
+    "rust": "gcr.io/oss-fuzz-base/base-builder-rust",
+    "python": "gcr.io/oss-fuzz-base/base-builder-python",
+    "java": "gcr.io/oss-fuzz-base/base-builder-jvm",
+    "javascript": "gcr.io/oss-fuzz-base/base-builder-javascript",
+}
+
+
+class BuildHandler(DockerHandler):
     """
-        OSV handler
+        Build handler
     """
 
     class Meta:
@@ -24,174 +28,186 @@ class BuildHandler(HandlersInterface, Handler):
 
     def _setup(self, app):
         super()._setup(app)
-        # TODO: should be moved somewhere else
-        self.gcs_client = storage.Client.create_anonymous_client()
-        self.app.log.info("GCS client initialized successfully")
 
-    def download_file(
-            self, bucket_name: str, source_blob_name: str, destination_file_path: Optional[str] = None
+    def get_project_base_image(self, project_name: str) -> str:
+        """
+        Build the base image of a project.
+
+        Args:
+            project_name: Project name.
+
+        Returns:
+            str: ID of the built Docker image.
+
+        Raises:
+            BuildError: If building the project fails.
+        """
+        try:
+            image_tag = f"osv-reproducer/{project_name}:latest"
+
+            # if image exists, return tag
+
+            if self.client.images.list(name=image_tag):
+                self.app.log.info(f"Image {image_tag} already exists")
+                return image_tag
+
+            self.app.log.info(f"Building project {project_name}")
+            project_info_path = self.app.projects_dir / project_name
+
+            # Build Docker image
+            self.build_image(dockerfile_path=project_info_path / "Dockerfile", tag=image_tag, remove_containers=False)
+            self.app.log.info(f"Successfully built project {project_name}")
+
+            return image_tag
+        except Exception as e:
+            self.app.log.error(f"Error while building project {project_name}: {str(e)}")
+            raise BuildError(f"Failed to build project {project_name}: {str(e)}")
+
+    def get_project_fuzzer_container(
+            self, project_info: ProjectInfo, project_image: str, issue_report: OSSFuzzIssueReport, working_dir: Path,
+            extra_args: dict = None,
     ) -> str:
-        # TODO: move to dedicated handler
         """
-        Download a file from a GCS bucket.
+        Run a Docker container for fuzzing a project and display its logs.
 
         Args:
-            bucket_name: Name of the GCS bucket.
-            source_blob_name: Name of the blob to download.
-            destination_file_path: Path to save the downloaded file. If None, creates a temporary file.
+            project_info: Project information.
+            project_image: Docker image to use.
+            issue_report: OSS-Fuzz issue report.
+            working_dir: Working directory for the fuzzer.
+            extra_args: Additional arguments to pass to the fuzzer. If None, uses the default arguments.
 
         Returns:
-            str: Path to the downloaded file.
+            str: ID of the created or existing container.
 
         Raises:
-            GCSError: If downloading the file fails.
+            DockerError: If running the container fails.
         """
         try:
-            # Create destination file path if it doesn't exist
-            if destination_file_path is None:
-                fd, destination_file_path = tempfile.mkstemp(prefix="osv-gcs-")
-                os.close(fd)
+            container_name = f"{issue_report.project}_{issue_report.id}"
 
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(os.path.abspath(destination_file_path)), exist_ok=True)
+            # Check if container with this name already exists
+            container = self.check_container_exists(container_name)
+            if container:
+                # Check if the container can be reused
+                if self.check_container_status(container):
+                    return container.id
 
-            self.app.log.info(f"Downloading file {source_blob_name} from bucket {bucket_name} to {destination_file_path}")
+            sanitizer = issue_report.sanitizer.split(" ")[0]
+            platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
 
-            # Download the file
-            bucket = self.gcs_client.bucket(bucket_name)
-            blob = bucket.blob(source_blob_name)
-            blob.download_to_filename(destination_file_path)
+            out_dir = working_dir / "out"
+            out_dir.mkdir(exist_ok=True)
 
-            self.app.log.info(f"Successfully downloaded file {source_blob_name} from bucket {bucket_name}")
-            return destination_file_path
-        except NotFound as e:
-            self.app.log.error(f"File {source_blob_name} not found in bucket {bucket_name}: {str(e)}")
-            raise GCSError(f"File {source_blob_name} not found in bucket {bucket_name}: {str(e)}")
-        except GoogleCloudError as e:
-            self.app.log.error(f"Google Cloud error while downloading file {source_blob_name}: {str(e)}")
-            raise GCSError(f"Failed to download file {source_blob_name}: {str(e)}")
-        except Exception as e:
-            self.app.log.error(f"Error while downloading file {source_blob_name}: {str(e)}")
-            raise GCSError(f"Failed to download file {source_blob_name}: {str(e)}")
+            work_dir = working_dir / "work"
+            work_dir.mkdir(exist_ok=True)
 
-    def file_exists(self, bucket_name: str, blob_name: str) -> bool:
-        """
-        Check if a file exists in a GCS bucket.
+            src_dir = working_dir / "src"
+            src_dir.mkdir(exist_ok=True)
 
-        Args:
-            bucket_name: Name of the GCS bucket.
-            blob_name: Name of the blob to check.
+            # Environment variables for the container
+            environment = {
+                'FUZZING_ENGINE': issue_report.fuzzing_engine.lower(),
+                'FUZZING_LANGUAGE': project_info.language,
+                'SANITIZER': sanitizer,
+                'ARCHITECTURE': issue_report.architecture,
+                'PROJECT_NAME': issue_report.project,
+                'HELPER': 'True'
+            }
 
-        Returns:
-            bool: True if the file exists, False otherwise.
+            if extra_args:
+                environment.update(extra_args)
 
-        Raises:
-            GCSError: If checking file existence fails.
-        """
-        try:
-            self.app.log.info(f"Checking if file {blob_name} exists in bucket {bucket_name}")
+            # Volumes to mount
+            volumes = {
+                str(out_dir): {'bind': '/out', 'mode': 'rw'},
+                str(work_dir): {'bind': '/work', 'mode': 'rw'},
+                str(src_dir): {'bind': '/src', 'mode': 'rw'}
+            }
 
-            # Check if file exists
-            bucket = self.gcs_client.bucket(bucket_name)
-            blob = bucket.blob(blob_name)
-            exists = blob.exists()
-
-            self.app.log.info(f"File {blob_name} {'exists' if exists else 'does not exist'} in bucket {bucket_name}")
-            return exists
-        except NotFound:
-            self.app.log.info(f"Bucket {bucket_name} not found")
-            return False
-        except GoogleCloudError as e:
-            self.app.log.error(f"Google Cloud error while checking if file {blob_name} exists: {str(e)}")
-            raise GCSError(f"Failed to check if file {blob_name} exists: {str(e)}")
-        except Exception as e:
-            self.app.log.error(f"Error while checking if file {blob_name} exists: {str(e)}")
-            raise GCSError(f"Failed to check if file {blob_name} exists: {str(e)}")
-
-    def download_srcmap(self, project: str, commit: str, destination_file_path: Optional[str] = None) -> Optional[str]:
-        """
-        Download a srcmap.json file for a specific project and commit.
-
-        Args:
-            project: Name of the project.
-            commit: Commit hash.
-            destination_file_path: Path to save the downloaded file. If None, creates a temporary file.
-
-        Returns:
-            Optional[str]: Path to the downloaded file, or None if the file doesn't exist.
-
-        Raises:
-            GCSError: If downloading the file fails.
-        """
-        try:
-            # OSS-Fuzz srcmap bucket and path format
-            bucket_name = "oss-fuzz-build-logs"
-            blob_name = f"{project}/srcmap/{commit}.json"
-
-            # Check if file exists
-            if not self.file_exists(bucket_name, blob_name):
-                self.app.log.warning(f"Srcmap for project {project} at commit {commit} not found")
-                return None
-
-            # Download the file
-            return self.download_file(bucket_name, blob_name, destination_file_path)
-        except GCSError:
-            # Re-raise GCSError
-            raise
-        except Exception as e:
-            self.app.log.error(f"Error while downloading srcmap for project {project} at commit {commit}: {str(e)}")
-            raise GCSError(f"Failed to download srcmap for project {project} at commit {commit}: {str(e)}")
-
-    def get_build_info(self, project_info: ProjectInfo, commit: str) -> BuildInfo:
-        """
-        Get build information for a project at a specific commit.
-
-        Args:
-            project_info: object with project info
-            commit: Commit hash.
-
-        Returns:
-            BuildInfo: Build information.
-
-        Raises:
-            BuildError: If getting build information fails.
-        """
-        try:
-            self.app.log.info(f"Getting build information for project {project_info.name} at commit {commit}")
-
-            project_info_path = self.app.projects_dir / project_info.name
-
-            # Get Dockerfile path
-            dockerfile_path = project_info_path / "Dockerfile"
-            if not dockerfile_path.exists():
-                self.app.log.warning(f"Dockerfile not found for project {project_info.name}")
-
-            # Get build script path
-            build_script_path = project_info_path / "build.sh"
-            if not build_script_path.exists():
-                self.app.log.warning(f"Build script not found in cache for project {project_info.name}")
-
-            # Get dependencies from srcmap.json
-            dependencies = {}
-            srcmap_path = self.download_srcmap(project_info.name, commit)
-
-            if srcmap_path:
-                with open(srcmap_path, "r") as f:
-                    srcmap = json.load(f)
-                dependencies = srcmap.get("dependencies", {})
-
-            # Create BuildInfo
-            build_info = BuildInfo(
-                project=project_info.name,
-                commit=commit,
-                language=project_info.language,
-                dockerfile_path=dockerfile_path,
-                build_script_path=build_script_path,
-                dependencies=dependencies,
+            # Run the container
+            container = self.run_container(
+                image=project_image,
+                container_name=container_name,
+                platform=platform,
+                environment=environment,
+                volumes=volumes,
+                tty=False,
+                stdin_open=True
             )
 
-            self.app.log.info(f"Successfully got build information for project {project_info.name} at commit {commit}")
-            return build_info
+            # Stream and display logs in real-time
+            self.stream_container_logs(container)
+
+            # Check container exit code
+            self.check_container_exit_code(container)
+
+            return container.id
         except Exception as e:
-            self.app.log.error(f"Error while getting build information for project {project_info.name} at commit {commit}: {str(e)}")
-            raise BuildError(f"Failed to get build information for project {project_info.name} at commit {commit}: {str(e)}")
+            self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
+            raise DockerError(f"Failed to run container {container_name}: {str(e)}")
+
+    def reproduce(self, test_case_path: Path, issue_report: OSSFuzzIssueReport, working_dir: Path) -> str:
+        """
+        Run a Docker container to reproduce a crash using a test case.
+
+        Args:
+            test_case_path: Path to the test case file.
+            issue_report: OSS-Fuzz issue report.
+            working_dir: Working directory for the reproducer.
+
+        Returns:
+            str: ID of the created container.
+
+        Raises:
+            DockerError: If running the container fails.
+        """
+        try:
+            container_name = f"{issue_report.project}_{issue_report.id}_crash"
+            platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
+            out_dir = working_dir / "out"
+            out_dir.mkdir(exist_ok=True)
+
+            # Check if container with this name already exists
+            container = self.check_container_exists(container_name)
+            if container:
+                # Check if the container can be reused
+                if self.check_container_status(container):
+                    return container.id
+
+            # Environment variables for the container
+            environment = {
+                'HELPER': 'True',
+                'ARCHITECTURE': issue_report.architecture
+            }
+
+            # Volumes to mount
+            volumes = {
+                str(out_dir): {'bind': '/out', 'mode': 'rw'},
+                str(test_case_path): {'bind': '/testcase', 'mode': 'ro'}
+            }
+
+            self.app.log.info(f"Running container {container_name} to reproduce crash")
+
+            # Run the container
+            container = self.run_container(
+                image='gcr.io/oss-fuzz-base/base-runner:latest',
+                container_name=container_name,
+                command=['reproduce', issue_report.fuzz_target, '-runs=100'],
+                platform=platform,
+                environment=environment,
+                volumes=volumes,
+                tty=False,
+                stdin_open=True
+            )
+
+            # Stream and display logs in real-time
+            self.stream_container_logs(container)
+
+            # Check container exit code
+            self.check_container_exit_code(container)
+
+            return container.id
+        except Exception as e:
+            self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
+            raise DockerError(f"Failed to run container {container_name}: {str(e)}")

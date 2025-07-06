@@ -9,10 +9,12 @@ from .core.exc import OSVReproducerError
 from .controllers.base import Base
 from .core.interfaces import HandlersInterface
 
+from .handlers.gcs import GCSHandler
 from .handlers.osv import OSVHandler
 from .handlers.build import BuildHandler
 from .handlers.github import GithubHandler
 from .handlers.project import ProjectHandler
+from .handlers.oss_fuzz import OSSFuzzHandler
 
 
 class OSVReproducer(App):
@@ -45,7 +47,7 @@ class OSVReproducer(App):
 
         # register handlers
         handlers = [
-            Base, GithubHandler, ProjectHandler, OSVHandler, BuildHandler
+            Base, GithubHandler, ProjectHandler, OSVHandler, GCSHandler, BuildHandler, OSSFuzzHandler
         ]
 
         interfaces = [

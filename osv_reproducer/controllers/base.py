@@ -1,11 +1,15 @@
+import json
+
 from tqdm import tqdm
 from pathlib import Path
 from cement import Controller, ex
 from cement.utils.version import get_version_banner
 
+from ..core.models.report import OSSFuzzIssueReport
 from ..core.version import get_version
 from ..core.exc import OSVReproducerError
 from ..core.models.result import ReproductionResult, ReproductionStatus
+from ..utils.misc import parse_key_value_string
 
 
 VERSION_BANNER = """
@@ -31,40 +35,14 @@ class Base(Controller):
             (['-vb', '--verbose'], {'help': "Verbose mode.", 'action': 'store_true', 'default': False})
         ]
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._osv_handler = None
-        self._github_handler = None
-        self._project_handler = None
-        self._build_handler = None
-
-    @property
-    def github_handler(self):
-        if self._github_handler is None:
-            self._github_handler = self.app.handler.get("handlers", "github", setup=True)
-
-        return self._github_handler
-
-    @property
-    def project_handler(self):
-        if self._project_handler is None:
-            self._project_handler = self.app.handler.get("handlers", "project", setup=True)
-
-        return self._project_handler
-
-    @property
-    def osv_handler(self):
-        if self._osv_handler is None:
-            self._osv_handler = self.app.handler.get("handlers", "osv", setup=True)
-
-        return self._osv_handler
-
-    @property
-    def build_handler(self):
-        if self._build_handler is None:
-            self._build_handler = self.app.handler.get("handlers", "build", setup=True)
-
-        return self._build_handler
+    def _setup(self, app):
+        super()._setup(app)
+        self.osv_handler = self.app.handler.get("handlers", "osv", setup=True)
+        self.oss_fuzz_handler = self.app.handler.get("handlers", "oss_fuzz", setup=True)
+        self.github_handler = self.app.handler.get("handlers", "github", setup=True)
+        self.project_handler = self.app.handler.get("handlers", "project", setup=True)
+        self.build_handler = self.app.handler.get("handlers", "build", setup=True)
+        self.gcs_handler = self.app.handler.get("handlers", "gcs", setup=True)
 
     def _default(self):
         """Default action if no sub-command is passed."""
@@ -102,7 +80,8 @@ class Base(Controller):
 
         # Process each project
         for project_content_file in tqdm(projects_folder, total=len(projects_folder)):
-            project_info = self.project_handler.get_oss_fuzz_project(oss_fuzz_repo, project_content_file, oss_fuzz_ref)
+            project_info = self.project_handler.get_oss_fuzz_project(oss_fuzz_repo, project_content_file.path, oss_fuzz_ref)
+
             if project_info:
                 projects[project_info.repo_path] = project_info
 
@@ -124,6 +103,11 @@ class Base(Controller):
             }),
             (['-nc', '--no-cache'], {
                 'help': "Don't use cached OSS-Fuzz project data.", 'action': 'store_true', 'default': False
+            }),
+            (['--build-extra-args'], {
+                'help': "Additional build arguments to pass to the fuzzer container as environment variables. "
+                       "Format: 'KEY1:VALUE1|KEY2:VALUE2'",
+                'type': str, 'default': ""
             })
         ]
     )
@@ -131,15 +115,6 @@ class Base(Controller):
         output_dir = Path(self.app.pargs.output_dir).expanduser()
 
         try:
-            # reproducer = Reproducer(
-            #     osv_id=osv_id,
-            #     github_token=github_token,
-            #     output_dir=output_dir,
-            #     keep_containers=keep_containers,
-            #     verbose=verbose,
-            #     cache_dir=None if no_cache else str(cache_dir),
-            # )
-
             self.app.log.info(f"Starting reproduction of vulnerability {self.app.pargs.osv_id}")
 
             result = ReproductionResult(
@@ -156,56 +131,91 @@ class Base(Controller):
             self.app.log.info(f"Fetching OSV record for {self.app.pargs.osv_id}")
             osv_record = self.osv_handler.fetch_vulnerability(self.app.pargs.osv_id)
 
-            # Step 2: Validate OSV record
-            self.app.log.info(f"Validating OSV record for {self.app.pargs.osv_id}")
-            git_range, introduced_version, fixed_version = self.osv_handler.get_git_range(osv_record)
+            if not osv_record.get_git_fixes():
+                raise OSVReproducerError(f"No fixes found for {self.app.pargs.osv_id}")
+
+            # check if the oss_fuzz_issue_report exists
+            oss_fuzz_issue_report_path = output_dir / f"{osv_record.id}_issue_report.json"
+            issue_report = None
+
+            if not oss_fuzz_issue_report_path.exists():
+                # get the oss_fuzz_info (srcmap and reproducer testcase)
+                for ref in osv_record.references:
+                    issue_report = self.oss_fuzz_handler.get_issue_report(ref.url)
+
+                    if issue_report:
+                        break
+                else:
+                    raise OSVReproducerError(f"Could not find an OSS-Fuzz Issue Report for {osv_record.id}")
+
+                with oss_fuzz_issue_report_path.open(mode="w") as f:
+                    oss_fuzz_issue_report_json = issue_report.model_dump_json(indent=4)
+                    f.write(oss_fuzz_issue_report_json)
+            else:
+                self.app.log.info(f"Using cached issue report for {self.app.pargs.osv_id}")
+                with oss_fuzz_issue_report_path.open(mode="r") as f:
+                    oss_fuzz_issue_report_dict = json.load(f)
+                    issue_report = OSSFuzzIssueReport(**oss_fuzz_issue_report_dict)
+
+            test_case_path = self.oss_fuzz_handler.get_test_case(issue_report, output_dir)
 
             # Get the project info
-            repo_id = self.github_handler.get_repo_id(git_range.repo.owner, git_range.repo.name)
-            project_info = self.project_handler.get_project_info_by_id(repo_id)
+            project_info = self.project_handler.get_project_info_by_name(issue_report.project)
 
             if not project_info:
-                raise OSVReproducerError(f"Could not find project info for {git_range.repo}")
+                self.app.log.info(f"Fetching from GitHub the project info for {issue_report.project}")
+                oss_fuzz_repo = self.github_handler.client.get_repo(owner="google", project="oss-fuzz")
+                project_info = self.project_handler.get_oss_fuzz_project(
+                    oss_fuzz_repo, f"projects/{issue_report.project}", "20a387d78148c14dd5243ea1b16164fe08b73884"
+                )
+                if not project_info:
+                    raise OSVReproducerError(f"Could not find project info for {issue_report.project}")
 
-            state = self.github_handler.get_commit_build_state(
-                git_range.repo.owner, git_range.repo.name, introduced_version
+            for param, value in issue_report.regressed_url.query_params():
+                if param == "range":
+                    timestamp = value.split(":")[-1]
+                    break
+            else:
+                raise Exception("No range found in query params")
+
+            sanitizer = issue_report.sanitizer.split(" ")[0]
+            srcmap_file_path = output_dir / f"{issue_report.project}_{timestamp}_srcmap.json"
+
+            if not srcmap_file_path.exists():
+                # Get srcmap.json
+                srcmap = self.gcs_handler.get_srcmap(issue_report.project, sanitizer, timestamp, srcmap_file_path)
+            else:
+                self.app.log.info(f"Using cached srcmap for {self.app.pargs.osv_id}")
+                with srcmap_file_path.open(mode="r") as f:
+                    srcmap = json.load(f)
+
+            for path, v in srcmap.items():
+                if v["type"] == "git":
+                    target_dir = output_dir / Path(path).relative_to("/")
+                    if target_dir.exists():
+                        self.app.log.info(f"Using cached repository for {self.app.pargs.osv_id} in {target_dir}")
+                        continue
+
+                    self.github_handler.clone_repository(
+                        repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
+                    )
+
+            self.project_handler.init(project_info, output_dir)
+
+            # Step 4: Build the base image of the project
+            base_image_tag = self.build_handler.get_project_base_image(project_info.name)
+
+            # Parse the build-extra-args parameter
+            extra_args = parse_key_value_string(self.app.pargs.build_extra_args)
+
+            fuzzer_container_name = self.build_handler.get_project_fuzzer_container(
+                project_info, base_image_tag, issue_report, output_dir, extra_args
             )
 
-            if state in ['error', 'failure']:
-                raise OSVReproducerError(f"Commit {introduced_version} with {state} state not valid for reproduction")
-
-            state = self.github_handler.get_commit_build_state(
-                git_range.repo.owner, git_range.repo.name, fixed_version
+            runner_container_name = self.build_handler.reproduce(
+                test_case_path, issue_report, output_dir
             )
 
-            if state in ['error', 'failure']:
-                raise OSVReproducerError(f"Commit {introduced_version} with {state} state not valid for reproduction")
-
-            # Step 3: Get build information for vulnerable and fixed versions
-            # Note: We don't need to clone the OSS-Fuzz repository here anymore
-            # as the BuildManager will use cached data if available
-
-            self.app.log.info(f"Getting build information for project {git_range.repo.name} at commit {introduced_version} (vuln)")
-            vulnerable_build_info = self.build_handler.get_build_info(project_info, introduced_version)
-
-            self.app.log.info(f"Getting build information for project {git_range.repo.name} at commit {introduced_version} (fix)")
-            fixed_build_info = self.build_handler.get_build_info(project_info, fixed_version)
-
-            # Update result with build information
-            result.vulnerable_build = vulnerable_build_info
-            result.fixed_build = fixed_build_info
-            #
-            # # Step 4: Build vulnerable version
-            # vulnerable_image = self._build_project(
-            #     vulnerable_build_info,
-            #     os.path.join(self.output_dir, "vulnerable"),
-            # )
-            #
-            # # Step 5: Build fixed version
-            # fixed_image = self._build_project(
-            #     fixed_build_info,
-            #     os.path.join(self.output_dir, "fixed"),
-            # )
             result.status = ReproductionStatus.SUCCESS
 
             if result.success:
