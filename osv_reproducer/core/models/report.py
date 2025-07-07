@@ -18,5 +18,11 @@ class OSSFuzzIssueReport(BaseModel):
 
     @property
     def architecture(self) -> str:
-        fuzzing_engine, sanitizer, arch, project = self.job_type.split("_")
-        return arch
+        values = self.job_type.split("_")
+
+        if len(values) == 4:
+            # should be fuzzing_engine, sanitizer, arch, project
+            return values[2]
+
+        # return default architecture
+        return "x86_64"

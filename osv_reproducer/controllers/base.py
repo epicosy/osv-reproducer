@@ -211,7 +211,7 @@ class Base(Controller):
             fuzzer_container_name = self.build_handler.get_project_fuzzer_container(
                 project_info, base_image_tag, issue_report, output_dir, extra_args
             )
-
+            # TODO: check if previous container exited successfully before running the next one
             runner_container_name = self.build_handler.reproduce(
                 test_case_path, issue_report, output_dir
             )
