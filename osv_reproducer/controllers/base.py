@@ -101,8 +101,8 @@ class Base(Controller):
                 'help': "Remove Docker containers after reproduction (default is to keep them).",
                 'action': 'store_true', 'default': False,
             }),
-            (['-nc', '--no-cache'], {
-                'help': "Don't use cached OSS-Fuzz project data.", 'action': 'store_true', 'default': False
+            (['-cs', '--cache-src'], {
+                'help': "Cache project related source code.", 'action': 'store_true', 'default': False
             }),
             (['--build-extra-args'], {
                 'help': "Additional build arguments to pass to the fuzzer container as environment variables. "
@@ -189,32 +189,41 @@ class Base(Controller):
                 with srcmap_file_path.open(mode="r") as f:
                     srcmap = json.load(f)
 
+            if self.app.pargs.cache_src:
+                base_src_dir = self.app.projects_dir / project_info.name
+            else:
+                base_src_dir = output_dir
+
             for path, v in srcmap.items():
                 if v["type"] == "git":
-                    target_dir = output_dir / Path(path).relative_to("/")
-                    if target_dir.exists():
-                        self.app.log.info(f"Using cached repository for {self.app.pargs.osv_id} in {target_dir}")
+                    target_dir = base_src_dir / Path(path).relative_to("/")
+                    local_repo_sha = self.github_handler.get_local_repo_head_commit(target_dir)
+
+                    if local_repo_sha and v["rev"] == local_repo_sha:
+                        self.app.log.info(f"Using cached repository at {local_repo_sha} for {self.app.pargs.osv_id} in {target_dir}")
                         continue
 
+                    # TODO: This should use a default path for the target_dir to reuse the cloned repositories.
                     self.github_handler.clone_repository(
                         repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
                     )
 
-            self.project_handler.init(project_info, output_dir)
+            self.project_handler.init(project_info, base_src_dir)
 
             # Step 4: Build the base image of the project
             base_image_tag = self.build_handler.get_project_base_image(project_info.name)
 
             # Parse the build-extra-args parameter
             extra_args = parse_key_value_string(self.app.pargs.build_extra_args)
+            out_dir = output_dir / "out"
 
             fuzzer_container_name = self.build_handler.get_project_fuzzer_container(
-                project_info, base_image_tag, issue_report, output_dir, extra_args
+                project_info, base_image_tag, issue_report, src_dir=base_src_dir / "src", out_dir=out_dir,
+                work_dir=output_dir / "work", extra_args=extra_args
             )
             # TODO: check if previous container exited successfully before running the next one
-            runner_container_name = self.build_handler.reproduce(
-                test_case_path, issue_report, output_dir
-            )
+            # TODO: reproduce command should belong to a different handler
+            runner_container_name = self.build_handler.reproduce(test_case_path, issue_report, out_dir=out_dir)
 
             result.status = ReproductionStatus.SUCCESS
 

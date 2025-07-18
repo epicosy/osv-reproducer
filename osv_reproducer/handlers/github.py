@@ -43,6 +43,16 @@ class GithubHandler(HandlersInterface, Handler):
 
         return self._cache[repo_path].id
 
+    def get_local_repo_head_commit(self, repo_path: Path) -> Optional[str]:
+        repo = git.Repo(repo_path)
+
+        if repo_path.exists():
+            return repo.head.commit.hexsha
+
+        self.app.log.warning(f"Repository {repo_path} not found.")
+
+        return None
+
     def get_commit_build_state(self, owner: str, project: str, version: str) -> str:
         """
             Validate build status of a GitHub repository at a given version.
@@ -88,23 +98,30 @@ class GithubHandler(HandlersInterface, Handler):
         Raises:
             GitHubError: If cloning the repository fails.
         """
+        to_clone = True
+
         try:
             # Create target directory if it doesn't exist
             if target_dir is None:
                 target_dir = tempfile.mkdtemp(prefix="osv-repo-")
             elif not target_dir.exists():
                 target_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                to_clone = False
 
             self.app.log.info(f"Cloning repository {repo_url} at commit {commit} to {target_dir}")
 
             # Clone the repository
             if shallow:
                 # Shallow clone with depth 1 and specific commit
-                repo = git.Repo.clone_from(
-                    repo_url,
-                    target_dir,
-                    no_checkout=True,
-                )
+                if to_clone:
+                    repo = git.Repo.clone_from(
+                        repo_url,
+                        target_dir,
+                        no_checkout=True,
+                    )
+                else:
+                    repo = git.Repo(target_dir)
                 repo.git.fetch("origin", commit, depth=1)
                 repo.git.checkout(commit)
             else:

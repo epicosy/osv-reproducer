@@ -64,8 +64,8 @@ class BuildHandler(DockerHandler):
             raise BuildError(f"Failed to build project {project_name}: {str(e)}")
 
     def get_project_fuzzer_container(
-            self, project_info: ProjectInfo, project_image: str, issue_report: OSSFuzzIssueReport, working_dir: Path,
-            extra_args: dict = None,
+            self, project_info: ProjectInfo, project_image: str, issue_report: OSSFuzzIssueReport, src_dir: Path,
+            out_dir: Path, work_dir: Path, extra_args: dict = None,
     ) -> str:
         """
         Run a Docker container for fuzzing a project and display its logs.
@@ -74,7 +74,9 @@ class BuildHandler(DockerHandler):
             project_info: Project information.
             project_image: Docker image to use.
             issue_report: OSS-Fuzz issue report.
-            working_dir: Working directory for the fuzzer.
+            src_dir: Working directory for the fuzzer.
+            out_dir: Directory for output files.
+            work_dir: Directory for temporary files.
             extra_args: Additional arguments to pass to the fuzzer. If None, uses the default arguments.
 
         Returns:
@@ -96,13 +98,8 @@ class BuildHandler(DockerHandler):
             sanitizer = issue_report.sanitizer.split(" ")[0]
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
 
-            out_dir = working_dir / "out"
             out_dir.mkdir(exist_ok=True)
-
-            work_dir = working_dir / "work"
             work_dir.mkdir(exist_ok=True)
-
-            src_dir = working_dir / "src"
             src_dir.mkdir(exist_ok=True)
 
             # Environment variables for the container
@@ -147,14 +144,14 @@ class BuildHandler(DockerHandler):
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")
 
-    def reproduce(self, test_case_path: Path, issue_report: OSSFuzzIssueReport, working_dir: Path) -> str:
+    def reproduce(self, test_case_path: Path, issue_report: OSSFuzzIssueReport, out_dir: Path) -> str:
         """
         Run a Docker container to reproduce a crash using a test case.
 
         Args:
             test_case_path: Path to the test case file.
             issue_report: OSS-Fuzz issue report.
-            working_dir: Working directory for the reproducer.
+            out_dir: Directory for output files.
 
         Returns:
             str: ID of the created container.
@@ -165,7 +162,6 @@ class BuildHandler(DockerHandler):
         try:
             container_name = f"{issue_report.project}_{issue_report.id}_crash"
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
-            out_dir = working_dir / "out"
             out_dir.mkdir(exist_ok=True)
 
             # Check if container with this name already exists
@@ -178,7 +174,8 @@ class BuildHandler(DockerHandler):
             # Environment variables for the container
             environment = {
                 'HELPER': 'True',
-                'ARCHITECTURE': issue_report.architecture
+                'ARCHITECTURE': issue_report.architecture,
+                'RUN_FUZZER_MODE': 'interactive'  # to store the output from the fuzzer
             }
 
             # Volumes to mount
