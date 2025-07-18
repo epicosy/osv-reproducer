@@ -217,15 +217,22 @@ class Base(Controller):
             extra_args = parse_key_value_string(self.app.pargs.build_extra_args)
             out_dir = output_dir / "out"
 
-            fuzzer_container_name = self.build_handler.get_project_fuzzer_container(
+            fuzzer_container = self.build_handler.get_project_fuzzer_container(
                 project_info, base_image_tag, issue_report, src_dir=base_src_dir / "src", out_dir=out_dir,
                 work_dir=output_dir / "work", extra_args=extra_args
             )
-            # TODO: check if previous container exited successfully before running the next one
-            # TODO: reproduce command should belong to a different handler
-            runner_container_name = self.build_handler.reproduce(test_case_path, issue_report, out_dir=out_dir)
 
-            result.status = ReproductionStatus.SUCCESS
+            if self.build_handler.check_container_exit_code(fuzzer_container) != 0:
+                raise OSVReproducerError(f"Fuzzer container for {self.app.pargs.osv_id} exited with non-zero exit code")
+
+            # TODO: reproduce command should belong to a different handler
+            crash_info = self.build_handler.reproduce(test_case_path, issue_report, out_dir=out_dir)
+            result.status = ReproductionStatus.FAILURE
+
+            if crash_info:
+                if crash_info.function == issue_report.crash_state.split(", ")[0]:
+                    print(crash_info.function == issue_report.crash_state.split(", ")[0])
+                    result.status = ReproductionStatus.SUCCESS
 
             if result.success:
                 self.app.log.info(f"Successfully reproduced vulnerability {self.app.pargs.osv_id}")

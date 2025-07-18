@@ -1,9 +1,13 @@
-from pathlib import Path
+import json
 
-from ..core.exc import BuildError, DockerError
-from ..core.models.project import ProjectInfo
-from ..core.models.report import OSSFuzzIssueReport
+from pathlib import Path
+from typing import Optional
+from docker.models.containers import Container
+
 from ..handlers.docker import DockerHandler
+from ..core.exc import BuildError, DockerError
+from ..utils.misc import parse_reproduce_output_to_dict
+from ..core.models import CrashInfo, ProjectInfo, OSSFuzzIssueReport
 
 
 # TODO: probably belongs in the config
@@ -66,7 +70,7 @@ class BuildHandler(DockerHandler):
     def get_project_fuzzer_container(
             self, project_info: ProjectInfo, project_image: str, issue_report: OSSFuzzIssueReport, src_dir: Path,
             out_dir: Path, work_dir: Path, extra_args: dict = None,
-    ) -> str:
+    ) -> Container:
         """
         Run a Docker container for fuzzing a project and display its logs.
 
@@ -80,7 +84,7 @@ class BuildHandler(DockerHandler):
             extra_args: Additional arguments to pass to the fuzzer. If None, uses the default arguments.
 
         Returns:
-            str: ID of the created or existing container.
+            str: name of the created or existing container.
 
         Raises:
             DockerError: If running the container fails.
@@ -90,10 +94,11 @@ class BuildHandler(DockerHandler):
 
             # Check if container with this name already exists
             container = self.check_container_exists(container_name)
+
             if container:
                 # Check if the container can be reused
-                if self.check_container_status(container):
-                    return container.id
+                if self.check_container_exit_status(container):
+                    return container
 
             sanitizer = issue_report.sanitizer.split(" ")[0]
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
@@ -139,12 +144,12 @@ class BuildHandler(DockerHandler):
             # Check container exit code
             self.check_container_exit_code(container)
 
-            return container.id
+            return container
         except Exception as e:
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")
 
-    def reproduce(self, test_case_path: Path, issue_report: OSSFuzzIssueReport, out_dir: Path) -> str:
+    def reproduce(self, test_case_path: Path, issue_report: OSSFuzzIssueReport, out_dir: Path) -> Optional[CrashInfo]:
         """
         Run a Docker container to reproduce a crash using a test case.
 
@@ -154,7 +159,7 @@ class BuildHandler(DockerHandler):
             out_dir: Directory for output files.
 
         Returns:
-            str: ID of the created container.
+            CrashInfo:
 
         Raises:
             DockerError: If running the container fails.
@@ -163,13 +168,20 @@ class BuildHandler(DockerHandler):
             container_name = f"{issue_report.project}_{issue_report.id}_crash"
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
             out_dir.mkdir(exist_ok=True)
+            crash_info_file = out_dir / "crash_info.json"
 
-            # Check if container with this name already exists
+            if crash_info_file.exists():
+                with crash_info_file.open(mode="r") as f:
+                    crash_info_dict = json.load(f)
+
+                    return CrashInfo(**crash_info_dict)
+
             container = self.check_container_exists(container_name)
+
             if container:
-                # Check if the container can be reused
-                if self.check_container_status(container):
-                    return container.id
+                # Delete it if already exists
+                self.app.log.info(f"Removing existing container {container_name}")
+                container.remove(force=True)
 
             # Environment variables for the container
             environment = {
@@ -199,12 +211,20 @@ class BuildHandler(DockerHandler):
             )
 
             # Stream and display logs in real-time
-            self.stream_container_logs(container)
+            logs = self.stream_container_logs(container)
 
             # Check container exit code
-            self.check_container_exit_code(container)
+            exit_code = self.check_container_exit_code(container)
 
-            return container.id
+            if exit_code == 1:
+                crash_info_dict = parse_reproduce_output_to_dict(logs)
+
+                with crash_info_file.open(mode="w") as f:
+                    json.dump(crash_info_dict, f, indent=4)
+
+                return CrashInfo(**crash_info_dict)
+
+            return None
         except Exception as e:
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")

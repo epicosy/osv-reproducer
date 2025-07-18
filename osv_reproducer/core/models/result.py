@@ -1,7 +1,8 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 from .build import BuildInfo
 
@@ -12,6 +13,16 @@ class ReproductionStatus(Enum):
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"
     FAILURE = "failure"
+
+
+class CrashInfo(BaseModel):
+    impact: str
+    operation: str
+    size: int
+    address: str
+    function: str
+    stack_trace: Optional[List[str]] = Field(default_factory=list)
+    file: str
 
 
 @dataclass
@@ -30,8 +41,7 @@ class ReproductionResult:
     status: ReproductionStatus
     vulnerable_build: Optional[BuildInfo] = None
     fixed_build: Optional[BuildInfo] = None
-    vulnerable_verification: Optional[VerificationResult] = None
-    fixed_verification: Optional[VerificationResult] = None
+    verification: Optional[VerificationResult] = None
     output_dir: Optional[str|Path] = None
     error: Optional[str] = None
 

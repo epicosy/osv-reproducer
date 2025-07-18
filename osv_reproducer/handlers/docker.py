@@ -103,14 +103,17 @@ class DockerHandler(HandlersInterface, Handler):
                 self.app.log.info(f"Container {container_name} already exists with ID {container.id}")
                 return container
 
+        self.app.log.warning(f"Container {container_name} not found")
+
         return None
 
-    def check_container_status(self, container: Container) -> bool:
+    def check_container_exit_status(self, container: Container, exit_code: int = 0) -> bool:
         """
         Check the status of a container and determine if it needs to be recreated.
 
         Args:
             container: Container object to check.
+            exit_code: Expected exit code of the container.
 
         Returns:
             bool: True if the container can be reused, False if it should be recreated.
@@ -119,13 +122,13 @@ class DockerHandler(HandlersInterface, Handler):
 
         if container.attrs['State']['Status'] == 'exited':
             exit_code = container.attrs['State']['ExitCode']
-            if exit_code != 0:
+            if exit_code != exit_code:
                 self.app.log.warning(f"Container {container.name} exited with code {exit_code}. Removing and recreating.")
                 container.remove(force=True)
                 self.app.log.info(f"Container {container.name} removed.")
                 return False
             else:
-                self.app.log.info(f"Container {container.name} exited successfully with code {exit_code}.")
+                self.app.log.info(f"Container {container.name} exited with code {exit_code}.")
                 return True
         else:
             self.app.log.info(f"Container {container.name} is in state: {container.attrs['State']['Status']}.")
@@ -184,7 +187,7 @@ class DockerHandler(HandlersInterface, Handler):
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")
 
-    def stream_container_logs(self, container: Container) -> None:
+    def stream_container_logs(self, container: Container) -> List[str]:
         """
         Stream and display logs from a container.
 
@@ -193,11 +196,16 @@ class DockerHandler(HandlersInterface, Handler):
         """
         self.app.log.info(f"Streaming logs for container {container.name}:")
 
+        logs = []
+
         # Stream logs line by line and manually decode bytes to strings
         for log_bytes in container.logs(stream=True, follow=True):
             line = log_bytes.decode('utf-8').strip()
             if line:  # Only log non-empty lines
+                logs.append(line)
                 self.app.log.info(line)
+
+        return logs
 
     def check_container_exit_code(self, container: Container) -> int:
         """
