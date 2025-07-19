@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional, List
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
+from sarif_pydantic.sarif import Stack
 
 from .build import BuildInfo
 
@@ -17,12 +18,10 @@ class ReproductionStatus(Enum):
 
 class CrashInfo(BaseModel):
     impact: str
-    operation: str
-    size: int
-    address: str
-    function: str
-    stack_trace: Optional[List[str]] = Field(default_factory=list)
-    file: str
+    operation: Optional[str] = Field(default=None)
+    size: Optional[int] = Field(default=None)
+    address: Optional[str] = Field(default=None)
+    stack: Stack
 
 
 @dataclass

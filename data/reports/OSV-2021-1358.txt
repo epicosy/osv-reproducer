@@ -1,0 +1,23 @@
+ https://oss-fuzz.com/testcase?key=6145272720261120
+
+Project: wolfmqtt
+Fuzzing Engine: libFuzzer
+Fuzz Target: wolfmqtt-fuzzer
+Job Type: libfuzzer_asan_wolfmqtt
+Platform Id: linux
+
+Crash Type: Heap-buffer-overflow READ 8
+Crash Address: 0x602000000198
+Crash State:
+  MqttClient_DecodePacket
+  MqttClient_WaitType
+  MqttClient_Ping_ex
+
+Sanitizer: address (ASAN)
+
+Recommended Security Severity: Medium
+
+Regressed: https://oss-fuzz.com/revisions?job=libfuzzer_asan_wolfmqtt&range=202107150601:202107160604
+
+Reproducer Testcase: https://oss-fuzz.com/download?testcase_id=6145272720261120
+

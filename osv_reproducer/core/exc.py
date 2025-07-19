@@ -19,6 +19,11 @@ class BuildError(Exception):
     pass
 
 
+class RunnerError(Exception):
+    """Generic errors."""
+    pass
+
+
 class GCSError(Exception):
     """Generic errors."""
     pass

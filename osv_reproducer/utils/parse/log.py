@@ -1,64 +1,10 @@
 import re
-from typing import List
+from typing import List, Dict, Any, Optional
+
+from osv_reproducer.utils.parse.common import create_frame, create_stack_dict
 
 MEMORY_ACCESS_PATTERN = r'(\w+) of size (\d+) at (0x[0-9a-fA-F]+) thread (T\d+)'
 DESCRIPTION_PATTERN = r'(\w[\w\-]+) on address (0x[0-9a-fA-F]+) at pc (0x[0-9a-fA-F]+) bp (0x[0-9a-fA-F]+) sp (0x[0-9a-fA-F]+)'
-
-
-def parse_key_value_string(key_value_string: str) -> dict:
-    """
-    Parse a string in the format "KEY1:VALUE1,KEY2:VALUE2" into a dictionary.
-
-    Args:
-        key_value_string: String in the format "KEY1:VALUE1,KEY2:VALUE2".
-
-    Returns:
-        dict: Dictionary with the parsed key-value pairs.
-    """
-    if not key_value_string:
-        return {}
-
-    result = {}
-    pairs = key_value_string.split('|')
-
-    for pair in pairs:
-        if ':' in pair:
-            key, value = pair.split(':', 1)  # Split on first occurrence of ':'
-            result[key.strip()] = value.strip()
-
-    return result
-
-
-def parse_section(section):
-    parsed = {}
-
-    for line in section.split('\n'):
-        if not line:
-            continue
-
-        key, value = line.split(': ')
-        key = key.lower().replace(" ", "_")
-        parsed[key] = value
-
-    return parsed
-
-def parse_oss_fuzz_report_to_dict(text: str):
-    parsed = {}
-    text_fmt = text.replace("\n  \n", "\n\n")
-    text_fmt = text_fmt.replace("Recommended Security Severity: ", "Severity: ")
-    text_fmt = text_fmt.replace("Regressed: ", "Regressed url: ")
-    text_fmt = text_fmt.replace("Reproducer Testcase: ", "Testcase url: ")
-    sections = text_fmt.split('\n\n')
-
-    for section in sections[1:]:
-        if section.startswith('Crash'):
-            section = section.replace(":\n  ", ": ")
-            section = section.replace("\n  ", ", ")
-
-        parsed_section = parse_section(section)
-        parsed.update(parsed_section)
-
-    return parsed
 
 
 def find_error_start(log_lines: List[str]) -> tuple:
@@ -109,7 +55,7 @@ def extract_error_info(log_lines: List[str], start_idx: int) -> dict:
 
     if match:
         error_info['operation'] = match.group(1)
-        error_info['size'] = match.group(2)
+        error_info['size'] = int(match.group(2))
         error_info['address'] = match.group(3)
 
     return error_info
@@ -169,32 +115,51 @@ def collect_stack_trace(log_lines: List[str], start_idx: int) -> tuple:
     return trace_lines, i
 
 
-def parse_reproduce_output_to_dict(log_lines: List[str]) -> dict:
+def parse_stack_frame(line: str) -> Optional[Dict[str, Any]]:
+    """
+    Parse a stack frame line and create a frame dictionary.
+
+    Args:
+        line: Stack frame line in the format "#N address in function file"
+
+    Returns:
+        dict: Frame dictionary or None if the line couldn't be parsed
+    """
+    parts = line.split(" in ", 1)
+    if len(parts) != 2:
+        return None
+
+    frame_id = parts[0].strip()  # e.g., "#0 0x55c8c1c740d8"
+    location_part = parts[1].strip()  # e.g., "MqttClient_DecodePacket mqtt_client.c"
+
+    # Extract function and file
+    location_parts = location_part.split(" ", 1)
+    function = location_parts[0]
+    file = location_parts[1] if len(location_parts) > 1 else ""
+
+    # Create and return a frame dictionary using the common function
+    return create_frame(function, file)
+
+
+def parse_reproduce_logs_to_dict(log_lines: List[str]) -> dict:
     """
     Parse sanitizer output logs to extract error information and stack trace.
 
     This function parses logs from sanitizers like AddressSanitizer to extract:
     - Error description (from the line starting with ==NUMBER==ERROR)
     - Error type and details (from the next line, e.g., "WRITE of size 1 at 0x5070000000e0 thread T0")
-    - Scariness information if available
     - Stack trace lines
-    - Summary information (sanitizer, error kind, file, and function)
 
     Args:
         log_lines: List of strings containing the log output
 
     Returns:
         dict: Dictionary containing parsed information with keys like:
-            - description: Description of the error
+            - impact: Description of the error type (e.g., "heap-buffer-overflow")
             - operation: Type of operation (e.g., "WRITE", "READ")
             - size: Size of the memory access
             - address: Memory address of the access
-            - scariness: Scariness information if available
-            - trace_lines: List of stack trace lines
-            - sanitizer: Name of the sanitizer (e.g., "AddressSanitizer")
-            - error_kind: Kind of error (e.g., "heap-buffer-overflow")
-            - file: File where the error occurred
-            - function: Function where the error occurred
+            - stack: Dictionary with the structure expected by CrashInfo for deserialization
     """
     parsed = {}
 
@@ -210,17 +175,14 @@ def parse_reproduce_output_to_dict(log_lines: List[str]) -> dict:
     error_info = extract_error_info(log_lines, start_idx)
     parsed.update(error_info)
 
-    # Extract scariness information
-    # scariness, next_idx = extract_scariness(log_lines, start_idx)
-    # if scariness:
-    #    parsed['scariness'] = scariness
-
     # Collect stack trace lines
     trace_lines, _ = collect_stack_trace(log_lines, start_idx)
-    parsed['stack_trace'] = trace_lines
 
-    if trace_lines:
-        _, location = trace_lines[0].split(" in ")
-        parsed['function'], parsed['file'] = location.split(" ")
+    # Parse stack frames
+    frames = [frame for line in trace_lines if (frame := parse_stack_frame(line))]
+
+    # Create a stack dictionary if we have frames
+    if frames:
+        parsed['stack'] = create_stack_dict(frames)
 
     return parsed

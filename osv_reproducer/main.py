@@ -2,7 +2,7 @@ from pathlib import Path
 
 from gitlib.common.exceptions import GitLibException
 
-from cement import App, TestApp
+from cement import App
 from cement.core.exc import CaughtSignal
 
 from .core.exc import OSVReproducerError
@@ -12,6 +12,7 @@ from .core.interfaces import HandlersInterface
 from .handlers.gcs import GCSHandler
 from .handlers.osv import OSVHandler
 from .handlers.build import BuildHandler
+from .handlers.runner import RunnerHandler
 from .handlers.github import GithubHandler
 from .handlers.project import ProjectHandler
 from .handlers.oss_fuzz import OSSFuzzHandler
@@ -47,7 +48,8 @@ class OSVReproducer(App):
 
         # register handlers
         handlers = [
-            Base, GithubHandler, ProjectHandler, OSVHandler, GCSHandler, BuildHandler, OSSFuzzHandler
+            Base, GithubHandler, ProjectHandler, OSVHandler, GCSHandler, BuildHandler, OSSFuzzHandler,
+            RunnerHandler
         ]
 
         interfaces = [
@@ -62,13 +64,6 @@ class OSVReproducer(App):
         projects_dir = Path.home() / ".osv_reproducer" / "projects"
         projects_dir.mkdir(exist_ok=True, parents=True)
         return projects_dir
-
-
-class OSVReproducerTest(TestApp,OSVReproducer):
-    """A sub-class of OSVReproducer that is better suited for testing."""
-
-    class Meta:
-        label = 'osv_reproducer'
 
 
 def main():

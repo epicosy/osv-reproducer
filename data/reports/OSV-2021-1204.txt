@@ -1,0 +1,23 @@
+ https://oss-fuzz.com/testcase?key=5516157747068928
+
+Project: wolfmqtt
+Fuzzing Engine: libFuzzer
+Fuzz Target: wolfmqtt-fuzzer
+Job Type: libfuzzer_asan_wolfmqtt
+Platform Id: linux
+
+Crash Type: Heap-buffer-overflow WRITE 1
+Crash Address: 0x607000000070
+Crash State:
+  MqttClient_DecodePacket
+  MqttClient_HandlePacket
+  MqttClient_WaitType
+
+Sanitizer: address (ASAN)
+
+Recommended Security Severity: High
+
+Regressed: https://oss-fuzz.com/revisions?job=libfuzzer_asan_wolfmqtt&range=202107180602:202107190607
+
+Reproducer Testcase: https://oss-fuzz.com/download?testcase_id=5516157747068928
+

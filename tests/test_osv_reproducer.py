@@ -1,6 +1,21 @@
+from cement import TestApp
+from osv_reproducer.main import OSVReproducer
 
-from pytest import raises
-from osv_reproducer.main import OSVReproducerTest
+
+class OSVReproducerTest(TestApp,OSVReproducer):
+    """A sub-class of OSVReproducer that is better suited for testing."""
+
+    class Meta:
+        label = 'osv_reproducer'
+
+        # Add a default configuration for testing
+        config_defaults = {
+            'osv_reproducer': {},
+            'tokens': {
+                'github': 'test_token'
+            }
+        }
+
 
 def test_osv_reproducer():
     # test osv_reproducer without any subcommands or arguments
@@ -15,22 +30,3 @@ def test_osv_reproducer_debug():
     with OSVReproducerTest(argv=argv) as app:
         app.run()
         assert app.debug is True
-
-
-def test_command1():
-    # test command1 without arguments
-    argv = ['command1']
-    with OSVReproducerTest(argv=argv) as app:
-        app.run()
-        data,output = app.last_rendered
-        assert data['foo'] == 'bar'
-        assert output.find('Foo => bar')
-
-
-    # test command1 with arguments
-    argv = ['command1', '--foo', 'not-bar']
-    with OSVReproducerTest(argv=argv) as app:
-        app.run()
-        data,output = app.last_rendered
-        assert data['foo'] == 'not-bar'
-        assert output.find('Foo => not-bar')

@@ -8,8 +8,9 @@ from pydantic import AnyHttpUrl, HttpUrl
 
 from ..core.models.report import OSSFuzzIssueReport
 from ..core.interfaces import HandlersInterface
-from ..utils.misc import parse_oss_fuzz_report_to_dict
+from ..utils.parse.report import parse_oss_fuzz_report_to_dict
 from ..common.constants import USER_AGENT_HEADERS, HTTP_HEADERS
+
 
 class OSSFuzzHandler(HandlersInterface, Handler):
 

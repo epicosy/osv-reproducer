@@ -1,5 +1,7 @@
 from pydantic import BaseModel, AnyHttpUrl
 
+from .result import CrashInfo
+
 
 class OSSFuzzIssueReport(BaseModel):
     id: str
@@ -12,9 +14,7 @@ class OSSFuzzIssueReport(BaseModel):
     severity: str
     testcase_url: AnyHttpUrl
     regressed_url: AnyHttpUrl
-    crash_type: str
-    crash_address: str
-    crash_state: str
+    crash_info: CrashInfo
 
     @property
     def architecture(self) -> str:

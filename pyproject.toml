@@ -33,7 +33,8 @@ dependencies = [
     "PyYAML>=6.0.2",
     "colorlog>=6.9.0",
     "tqdm>=4.67.1",
-    "GitPython>=3.1.44"
+    "GitPython>=3.1.44",
+    "sarif-pydantic>=0.5.3"
 ]
 
 [project.optional-dependencies]

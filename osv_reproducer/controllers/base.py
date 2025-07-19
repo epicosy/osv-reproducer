@@ -9,7 +9,7 @@ from ..core.models.report import OSSFuzzIssueReport
 from ..core.version import get_version
 from ..core.exc import OSVReproducerError
 from ..core.models.result import ReproductionResult, ReproductionStatus
-from ..utils.misc import parse_key_value_string
+from ..utils.parse.arguments import parse_key_value_string
 
 
 VERSION_BANNER = """
@@ -42,6 +42,7 @@ class Base(Controller):
         self.github_handler = self.app.handler.get("handlers", "github", setup=True)
         self.project_handler = self.app.handler.get("handlers", "project", setup=True)
         self.build_handler = self.app.handler.get("handlers", "build", setup=True)
+        self.runner_handler = self.app.handler.get("handlers", "runner", setup=True)
         self.gcs_handler = self.app.handler.get("handlers", "gcs", setup=True)
 
     def _default(self):
@@ -194,28 +195,30 @@ class Base(Controller):
             else:
                 base_src_dir = output_dir
 
-            for path, v in srcmap.items():
-                if v["type"] == "git":
-                    target_dir = base_src_dir / Path(path).relative_to("/")
-                    local_repo_sha = self.github_handler.get_local_repo_head_commit(target_dir)
-
-                    if local_repo_sha and v["rev"] == local_repo_sha:
-                        self.app.log.info(f"Using cached repository at {local_repo_sha} for {self.app.pargs.osv_id} in {target_dir}")
-                        continue
-
-                    # TODO: This should use a default path for the target_dir to reuse the cloned repositories.
-                    self.github_handler.clone_repository(
-                        repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
-                    )
-
-            self.project_handler.init(project_info, base_src_dir)
-
             # Step 4: Build the base image of the project
             base_image_tag = self.build_handler.get_project_base_image(project_info.name)
 
             # Parse the build-extra-args parameter
             extra_args = parse_key_value_string(self.app.pargs.build_extra_args)
             out_dir = output_dir / "out"
+
+            if not self.build_handler.check_container_exists(f"{issue_report.project}_{issue_report.id}"):
+                # If there is no existing container for the given issue, then get the src
+                for path, v in srcmap.items():
+                    if v["type"] == "git":
+                        target_dir = base_src_dir / Path(path).relative_to("/")
+                        local_repo_sha = self.github_handler.get_local_repo_head_commit(target_dir)
+
+                        if local_repo_sha and v["rev"] == local_repo_sha:
+                            self.app.log.info(
+                                f"Using cached repository at {local_repo_sha} for {self.app.pargs.osv_id} in {target_dir}")
+                            continue
+
+                        self.github_handler.clone_repository(
+                            repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
+                        )
+
+                self.project_handler.init(project_info, base_src_dir)
 
             fuzzer_container = self.build_handler.get_project_fuzzer_container(
                 project_info, base_image_tag, issue_report, src_dir=base_src_dir / "src", out_dir=out_dir,
@@ -226,12 +229,11 @@ class Base(Controller):
                 raise OSVReproducerError(f"Fuzzer container for {self.app.pargs.osv_id} exited with non-zero exit code")
 
             # TODO: reproduce command should belong to a different handler
-            crash_info = self.build_handler.reproduce(test_case_path, issue_report, out_dir=out_dir)
+            crash_info = self.runner_handler.reproduce(test_case_path, issue_report, out_dir=out_dir)
             result.status = ReproductionStatus.FAILURE
 
             if crash_info:
-                if crash_info.function == issue_report.crash_state.split(", ")[0]:
-                    print(crash_info.function == issue_report.crash_state.split(", ")[0])
+                if crash_info.stack.frames[0].location.logical_locations[0].name == issue_report.crash_info.stack.frames[0].location.logical_locations[0].name:
                     result.status = ReproductionStatus.SUCCESS
 
             if result.success:
