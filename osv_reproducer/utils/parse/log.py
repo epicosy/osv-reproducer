@@ -4,7 +4,9 @@ from typing import List, Dict, Any, Optional
 from osv_reproducer.utils.parse.common import create_frame, create_stack_dict
 
 MEMORY_ACCESS_PATTERN = r'(\w+) of size (\d+) at (0x[0-9a-fA-F]+) thread (T\d+)'
+SIGNAL_PATTERN = r'The signal is caused by a (\w+) memory access\.'
 DESCRIPTION_PATTERN = r'(\w[\w\-]+) on address (0x[0-9a-fA-F]+) at pc (0x[0-9a-fA-F]+) bp (0x[0-9a-fA-F]+) sp (0x[0-9a-fA-F]+)'
+SEGV_PATTERN = r'SEGV on unknown address (0x[0-9a-fA-F]+)'
 
 
 def find_error_start(log_lines: List[str]) -> tuple:
@@ -30,6 +32,11 @@ def find_error_start(log_lines: List[str]) -> tuple:
 
                 if match:
                     return i, {"impact": match.group(1), "address": match.group(2)}
+
+                # Check for SEGV errors which have a different format
+                segv_match = re.search(SEGV_PATTERN, description_parts[-1])
+                if segv_match:
+                    return i, {"impact": "SEGV", "address": segv_match.group(1)}
 
     return -1, None
 
@@ -57,6 +64,13 @@ def extract_error_info(log_lines: List[str], start_idx: int) -> dict:
         error_info['operation'] = match.group(1)
         error_info['size'] = int(match.group(2))
         error_info['address'] = match.group(3)
+    elif error_line.strip().startswith("=="):
+        # Check for SEGV errors which have a different format
+        signal_match = re.search(SIGNAL_PATTERN, error_line)
+        if signal_match:
+            error_info['operation'] = signal_match.group(1)
+            # For SEGV errors, size is None
+            error_info['size'] = None
 
     return error_info
 

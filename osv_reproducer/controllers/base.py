@@ -118,12 +118,7 @@ class Base(Controller):
         try:
             self.app.log.info(f"Starting reproduction of vulnerability {self.app.pargs.osv_id}")
 
-            result = ReproductionResult(
-                osv_id=self.app.pargs.osv_id, status=ReproductionStatus.NOT_STARTED, output_dir=output_dir,
-            )
-
-            # Update status
-            result.status = ReproductionStatus.IN_PROGRESS
+            result = ReproductionResult(osv_id=self.app.pargs.osv_id, output_dir=output_dir)
 
             # Create output directory
             output_dir.mkdir(exist_ok=True, parents=True)
@@ -228,20 +223,19 @@ class Base(Controller):
             if self.build_handler.check_container_exit_code(fuzzer_container) != 0:
                 raise OSVReproducerError(f"Fuzzer container for {self.app.pargs.osv_id} exited with non-zero exit code")
 
-            # TODO: reproduce command should belong to a different handler
             crash_info = self.runner_handler.reproduce(test_case_path, issue_report, out_dir=out_dir)
-            result.status = ReproductionStatus.FAILURE
 
             if crash_info:
-                if crash_info.stack.frames[0].location.logical_locations[0].name == issue_report.crash_info.stack.frames[0].location.logical_locations[0].name:
-                    result.status = ReproductionStatus.SUCCESS
+                result.verification = self.runner_handler.verify_crash(issue_report, crash_info)
 
-            if result.success:
+            if result.verification and result.verification.success:
                 self.app.log.info(f"Successfully reproduced vulnerability {self.app.pargs.osv_id}")
                 self.app.log.info(f"Results saved to {output_dir}")
                 exit(0)
             else:
-                self.app.log.error(f"Failed to reproduce vulnerability {self.app.pargs.osv_id}: {result.error}")
+                self.app.log.error(
+                    f"{self.app.pargs.osv_id} reproduction did not yield expected values:\n{result.verification.error_messages}"
+                )
         except OSVReproducerError as e:
             self.app.log.error(f"Error: {str(e)}")
         except Exception as e:

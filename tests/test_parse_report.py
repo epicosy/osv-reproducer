@@ -19,6 +19,20 @@ REPORT_FILES = {
         'address': '0x607000000070',
         'crash_state_functions': ['MqttClient_DecodePacket', 'MqttClient_HandlePacket', 'MqttClient_WaitType']
     },
+    'OSV-2021-1352.txt': {
+        'project': 'wolfmqtt',
+        'fuzzing_engine': 'libFuzzer',
+        'fuzz_target': 'wolfmqtt-fuzzer',
+        'job_type': 'libfuzzer_asan_wolfmqtt',
+        'platform_id': 'linux',
+        'sanitizer': 'address (ASAN)',
+        'severity': 'Medium',
+        'impact': 'unknown',
+        'operation': 'READ',
+        'size': None,
+        'address': '0x000097b34018',
+        'crash_state_functions': ['MqttProps_Free', 'MqttClient_Unsubscribe', 'wolfMQTTFuzzer::unsubscribe']
+    },
     'OSV-2021-1358.txt': {
         'project': 'wolfmqtt',
         'fuzzing_engine': 'libFuzzer',

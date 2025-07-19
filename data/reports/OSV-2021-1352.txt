@@ -1,0 +1,23 @@
+ https://oss-fuzz.com/testcase?key=5963165167386624
+
+Project: wolfmqtt
+Fuzzing Engine: libFuzzer
+Fuzz Target: wolfmqtt-fuzzer
+Job Type: libfuzzer_asan_wolfmqtt
+Platform Id: linux
+
+Crash Type: UNKNOWN READ
+Crash Address: 0x000097b34018
+Crash State:
+  MqttProps_Free
+  MqttClient_Unsubscribe
+  wolfMQTTFuzzer::unsubscribe
+
+Sanitizer: address (ASAN)
+
+Recommended Security Severity: Medium
+
+Regressed: https://oss-fuzz.com/revisions?job=libfuzzer_asan_wolfmqtt&range=202107150601:202107160604
+
+Reproducer Testcase: https://oss-fuzz.com/download?testcase_id=5963165167386624
+

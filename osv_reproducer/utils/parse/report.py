@@ -32,7 +32,7 @@ def parse_crash_type(crash_type: str) -> Dict[str, Any]:
     Parse the crash type string to extract impact, operation, and size.
 
     Args:
-        crash_type: String in the format "Impact OPERATION SIZE"
+        crash_type: String in the format "Impact OPERATION SIZE" or "Impact OPERATION"
 
     Returns:
         dict: Dictionary with impact, operation, and size
@@ -49,6 +49,12 @@ def parse_crash_type(crash_type: str) -> Dict[str, Any]:
     if op_size_match:
         result['operation'] = op_size_match.group(1)
         result['size'] = int(op_size_match.group(2))
+    else:
+        # Extract operation only (e.g., "READ" in "UNKNOWN READ")
+        op_match = re.search(r'([A-Z]+)$', crash_type)
+        if op_match:
+            result['operation'] = op_match.group(1)
+            result['size'] = None
 
     return result
 

@@ -1,0 +1,40 @@
++ FUZZER=wolfmqtt-fuzzer
++ shift
++ '[' '!' -v TESTCASE ']'
++ TESTCASE=/testcase
++ '[' '!' -f /testcase ']'
++ export RUN_FUZZER_MODE=interactive
++ RUN_FUZZER_MODE=interactive
++ export FUZZING_ENGINE=libfuzzer
++ FUZZING_ENGINE=libfuzzer
++ export SKIP_SEED_CORPUS=1
++ SKIP_SEED_CORPUS=1
++ run_fuzzer wolfmqtt-fuzzer -runs=100 /testcase
+vm.mmap_rnd_bits = 28
+/out/wolfmqtt-fuzzer -rss_limit_mb=2560 -timeout=25 -runs=100 /testcase < /dev/null
+Running with entropic power schedule (0xFF, 100).
+Seed: 3287029288
+Loaded 1 modules   (19029 inline 8-bit counters): 19029 [0x5631225a2410, 0x5631225a6e65),
+Loaded 1 PC tables (19029 PCs): 19029 [0x5631225a6e68,0x5631225f13b8),
+/out/wolfmqtt-fuzzer: Running 1 inputs 100 time(s) each.
+Running: /testcase
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==13==ERROR: AddressSanitizer: SEGV on unknown address 0x000000bd00c5 (pc 0x56312238e516 bp 0x7fff54569810 sp 0x7fff545697d0 T0)
+==13==The signal is caused by a WRITE memory access.
+SCARINESS: 30 (wild-addr-write)
+#0 0x56312238e516 in MqttProps_Free (/out/wolfmqtt-fuzzer+0x256516)
+#1 0x5631223839dd in MqttClient_Unsubscribe (/out/wolfmqtt-fuzzer+0x24b9dd)
+#2 0x5631223694eb in wolfMQTTFuzzer::unsubscribe() (/out/wolfmqtt-fuzzer+0x2314eb)
+#3 0x56312236bfbf in wolfMQTTFuzzer::Run() (/out/wolfmqtt-fuzzer+0x233fbf)
+#4 0x56312236cadb in LLVMFuzzerTestOneInput (/out/wolfmqtt-fuzzer+0x234adb)
+#5 0x563122218390 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#6 0x563122203605 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:327:6
+#7 0x56312220909f in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:862:9
+#8 0x563122234342 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#9 0x7f827e93c082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 5792732f783158c66fb4f3756458ca24e46e827d)
+#10 0x5631221fb7ed in _start (/out/wolfmqtt-fuzzer+0xc37ed)
+DEDUP_TOKEN: MqttProps_Free--MqttClient_Unsubscribe--wolfMQTTFuzzer::unsubscribe()
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (/out/wolfmqtt-fuzzer+0x256516) in MqttProps_Free
+==13==ABORTING

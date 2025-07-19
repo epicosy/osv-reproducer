@@ -7,6 +7,7 @@ from ..handlers.docker import DockerHandler
 from ..core.exc import RunnerError, DockerError
 from ..utils.parse.log import parse_reproduce_logs_to_dict
 from ..core.models import CrashInfo, OSSFuzzIssueReport
+from ..core.models.result import ReproductionStatus, VerificationResult
 
 
 class RunnerHandler(DockerHandler):
@@ -99,3 +100,64 @@ class RunnerHandler(DockerHandler):
         except Exception as e:
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")
+
+    def verify_crash(self, issue_report: OSSFuzzIssueReport, crash_info: CrashInfo) -> VerificationResult:
+        """
+        Verify if the given crash_info matches the crash_info in the OSSFuzzIssueReport.
+
+        Args:
+            issue_report: The OSS-Fuzz issue report containing the reference crash_info.
+            crash_info: The crash_info to verify against the reference.
+
+        Returns:
+            VerificationResult: The result of the verification.
+        """
+        verification_result = VerificationResult(success=True)
+
+        # Check impact
+        if crash_info.impact != issue_report.crash_info.impact:
+            verification_result.error_messages.append(
+                f"Impact mismatch: {crash_info.impact} != {issue_report.crash_info.impact}"
+            )
+
+        # Check operation
+        if crash_info.operation != issue_report.crash_info.operation:
+            verification_result.error_messages.append(
+                f"Operation mismatch: {crash_info.operation} != {issue_report.crash_info.operation}"
+            )
+
+        # Check size
+        if crash_info.size != issue_report.crash_info.size:
+            verification_result.error_messages.append(
+                f"Size mismatch: {crash_info.size} != {issue_report.crash_info.size}"
+            )
+
+        # Check address
+        if crash_info.address != issue_report.crash_info.address:
+            self.app.log.warning(f"Address mismatch: {crash_info.address} != {issue_report.crash_info.address}")
+
+        # Check stack frames
+        report_frames_count = len(issue_report.crash_info.stack.frames)
+
+        # Check if we have at least one frame to compare
+        if report_frames_count == 0 or len(crash_info.stack.frames) == 0:
+            verification_result.error_messages.append("No stack frames to compare")
+
+        # Compare stack frames (only as many as in the OSSFuzzIssueReport)
+        for i in range(min(report_frames_count, len(crash_info.stack.frames))):
+            report_frame_name = issue_report.crash_info.stack.frames[i].location.logical_locations[0].name
+            crash_frame_name = crash_info.stack.frames[i].location.logical_locations[0].name
+
+            if report_frame_name != crash_frame_name:
+                message = f"Stack frame {i} mismatch: {crash_frame_name} != {report_frame_name}"
+                self.app.log.warning(message)
+
+                # If it's the first frame and it doesn't match, return failure
+                if i == 0:
+                    verification_result.error_messages.append(message)
+
+        if len(verification_result.error_messages) > 0:
+            verification_result.success = False
+
+        # Success condition: impact, operation, size, and first stack frame match
+        return verification_result

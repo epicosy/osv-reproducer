@@ -1,11 +1,8 @@
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List
-from dataclasses import dataclass
 from pydantic import BaseModel, Field
 from sarif_pydantic.sarif import Stack
-
-from .build import BuildInfo
 
 
 class ReproductionStatus(Enum):
@@ -24,27 +21,16 @@ class CrashInfo(BaseModel):
     stack: Stack
 
 
-@dataclass
-class VerificationResult:
+class VerificationResult(BaseModel):
     """Result of vulnerability verification."""
-    success: bool
+    success: bool = Field(default=False)
     crash_signature: Optional[str] = None
     stack_trace: Optional[str] = None
-    error_message: Optional[str] = None
+    error_messages: List[str] = Field(default_factory=list)
 
 
-@dataclass
-class ReproductionResult:
+class ReproductionResult(BaseModel):
     """Result of the reproduction process."""
     osv_id: str
-    status: ReproductionStatus
-    vulnerable_build: Optional[BuildInfo] = None
-    fixed_build: Optional[BuildInfo] = None
     verification: Optional[VerificationResult] = None
     output_dir: Optional[str|Path] = None
-    error: Optional[str] = None
-
-    @property
-    def success(self) -> bool:
-        """Return True if reproduction was successful."""
-        return self.status == ReproductionStatus.SUCCESS

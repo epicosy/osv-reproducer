@@ -14,6 +14,15 @@ LOG_FILES = {
         'first_frame_module': 'mqtt_client.c',
         'num_frames': 11
     },
+    'OSV-2021-1352.txt': {
+        'impact': 'SEGV',
+        'operation': 'WRITE',
+        'size': None,
+        'address': '0x000000bd00c5',
+        'first_frame_function': 'MqttProps_Free',
+        'first_frame_module': '(/out/wolfmqtt-fuzzer+0x256516)',
+        'num_frames': 11
+    },
     'OSV-2021-1358.txt': {
         'impact': 'stack-buffer-overflow',
         'operation': 'WRITE',
