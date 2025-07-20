@@ -5,10 +5,9 @@ from pathlib import Path
 from cement import Controller, ex
 from cement.utils.version import get_version_banner
 
-from ..core.models.report import OSSFuzzIssueReport
 from ..core.version import get_version
 from ..core.exc import OSVReproducerError
-from ..core.models.result import ReproductionResult, ReproductionStatus
+from ..core.models.result import ReproductionResult
 from ..utils.parse.arguments import parse_key_value_string
 
 
@@ -133,29 +132,15 @@ class Base(Controller):
                 raise OSVReproducerError(f"No fixes found for {self.app.pargs.osv_id}")
 
             # check if the oss_fuzz_issue_report exists
-            oss_fuzz_issue_report_path = output_dir / f"{osv_record.id}_issue_report.json"
-            issue_report = None
+            issue_report = self.oss_fuzz_handler.get_issue_report(osv_record)
 
-            if not oss_fuzz_issue_report_path.exists():
-                # get the oss_fuzz_info (srcmap and reproducer testcase)
-                for ref in osv_record.references:
-                    issue_report = self.oss_fuzz_handler.get_issue_report(ref.url)
+            if not issue_report:
+                raise OSVReproducerError(f"Could not find an OSS-Fuzz Issue Report for {osv_record.id}")
 
-                    if issue_report:
-                        break
-                else:
-                    raise OSVReproducerError(f"Could not find an OSS-Fuzz Issue Report for {osv_record.id}")
+            test_case_path = self.oss_fuzz_handler.get_test_case(issue_report.testcase_url)
 
-                with oss_fuzz_issue_report_path.open(mode="w") as f:
-                    oss_fuzz_issue_report_json = issue_report.model_dump_json(indent=4)
-                    f.write(oss_fuzz_issue_report_json)
-            else:
-                self.app.log.info(f"Using cached issue report for {self.app.pargs.osv_id}")
-                with oss_fuzz_issue_report_path.open(mode="r") as f:
-                    oss_fuzz_issue_report_dict = json.load(f)
-                    issue_report = OSSFuzzIssueReport(**oss_fuzz_issue_report_dict)
-
-            test_case_path = self.oss_fuzz_handler.get_test_case(issue_report, output_dir)
+            if not test_case_path:
+                raise OSVReproducerError(f"Could not get the testcase for {issue_report.id} OSS-Fuzz Issue Report")
 
             # Get the project info
             project_info = self.project_handler.get_project_info_by_name(issue_report.project)

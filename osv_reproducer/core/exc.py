@@ -24,6 +24,11 @@ class RunnerError(Exception):
     pass
 
 
+class OSSFuzzError(Exception):
+    """Generic errors."""
+    pass
+
+
 class GCSError(Exception):
     """Generic errors."""
     pass

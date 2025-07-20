@@ -57,13 +57,31 @@ class OSVReproducer(App):
         ]
 
     @property
+    def app_dir(self):
+        path = Path.home() / ".osv_reproducer"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
+    @property
     def projects_dir(self):
         """
             Return the path to the projects folder.
         """
-        projects_dir = Path.home() / ".osv_reproducer" / "projects"
-        projects_dir.mkdir(exist_ok=True, parents=True)
-        return projects_dir
+        path = Path.home() / ".osv_reproducer" / "projects"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
+    @property
+    def issues_dir(self):
+        path = Path.home() / ".osv_reproducer" / "issues"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
+    @property
+    def testcases_dir(self):
+        path = Path.home() / ".osv_reproducer" / "testcases"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
 
 
 def main():
