@@ -121,8 +121,7 @@ class DockerHandler(HandlersInterface, Handler):
         container.reload()  # Refresh container data
 
         if container.attrs['State']['Status'] == 'exited':
-            exit_code = container.attrs['State']['ExitCode']
-            if exit_code != exit_code:
+            if exit_code != container.attrs['State']['ExitCode']:
                 self.app.log.warning(f"Container {container.name} exited with code {exit_code}. Removing and recreating.")
                 container.remove(force=True)
                 self.app.log.info(f"Container {container.name} removed.")

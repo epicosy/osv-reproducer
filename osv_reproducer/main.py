@@ -83,6 +83,12 @@ class OSVReproducer(App):
         path.mkdir(exist_ok=True, parents=True)
         return path
 
+    @property
+    def snapshots_dir(self):
+        path = Path.home() / ".osv_reproducer" / "snapshots"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
 
 def main():
     with OSVReproducer() as app:

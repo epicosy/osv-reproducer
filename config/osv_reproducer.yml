@@ -25,7 +25,8 @@ handlers:
     token: "<YOUR_TOKEN_HERE>"
   project:
     oss_fuzz_repo_sha: "20a387d78148c14dd5243ea1b16164fe08b73884"
-
+  gcs:
+    bucket_name: "clusterfuzz-builds"
 
 log.colorlog:
 

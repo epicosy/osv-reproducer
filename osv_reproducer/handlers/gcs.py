@@ -21,7 +21,7 @@ class GCSHandler(HandlersInterface, Handler):
 
     def _setup(self, app):
         super()._setup(app)
-
+        self.config = self.app.config.get("handlers", "gcs")
         self.gcs_client = storage.Client.create_anonymous_client()
         self.app.log.info("GCS client initialized successfully")
 
@@ -97,15 +97,14 @@ class GCSHandler(HandlersInterface, Handler):
             self.app.log.error(f"Error while checking if file {blob_name} exists: {str(e)}")
             raise GCSError(f"Failed to check if file {blob_name} exists: {str(e)}")
 
-    def get_srcmap(self, project_name: str, sanitizer: str, timestamp: str, output_file_path: Path) -> Optional[dict]:
+    def get_snapshot(self, project_name: str, sanitizer: str, timestamp: str) -> Optional[dict]:
         """
-        Download a srcmap.json file for a specific OSS Fuzz issue.
+        Downloads a timestamp.srcmap.json file for a specific OSS Fuzz issue.
 
         Args:
             project_name: Name of the OSS-Fuzz project.
             sanitizer: Name of the sanitizer.
             timestamp: Timestamp of the build.
-            output_file_path: Path to save the downloaded file.
 
         Returns:
             Optional[str]: Path to the downloaded file, or None if the file doesn't exist.
@@ -113,19 +112,23 @@ class GCSHandler(HandlersInterface, Handler):
         Raises:
             GCSError: If downloading the file fails.
         """
-        try:
-            # OSS-Fuzz srcmap bucket and path format
-            bucket_name = "clusterfuzz-builds"
+        snapshot_file_path = self.app.snapshots_dir / f"{timestamp}.json"
 
+        if snapshot_file_path.exists():
+            self.app.log.info(f"Using cached snapshots for {self.app.pargs.osv_id}")
+            with snapshot_file_path.open(mode="r") as f:
+                return json.load(f)
+
+        try:
             blob_name = f"{project_name}/{project_name}-{sanitizer}-{timestamp}.srcmap.json"
 
             # Check if file exists
-            if not self.file_exists(bucket_name, blob_name):
+            if not self.file_exists(self.config["bucket_name"], blob_name):
                 self.app.log.warning(f"Srcmap for project {project_name} at {timestamp} not found")
                 return None
 
             # Download the file
-            path = self.download_file(bucket_name, blob_name, output_file_path)
+            path = self.download_file(self.config["bucket_name"], blob_name, snapshot_file_path)
 
             with path.open(mode="r") as f:
                 srcmap = json.load(f)

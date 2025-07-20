@@ -109,7 +109,7 @@ class ProjectHandler(GithubHandler):
             self.app.log.error(f"Error saving project files: {e}")
             return False
 
-    def init(self, project_info: ProjectInfo, srcmap: Dict[str, dict], output_dir: Path):
+    def init(self, project_info: ProjectInfo, snapshot: Dict[str, dict], output_dir: Path):
         src_dir = output_dir / "src"
         src_dir.mkdir(exist_ok=True, parents=True)
         build_file_path = self.app.projects_dir / project_info.name / "build.sh"
@@ -118,7 +118,7 @@ class ProjectHandler(GithubHandler):
             # copy the file to the src_dir
             shutil.copy(build_file_path, src_dir)
 
-        for path, v in srcmap.items():
+        for path, v in snapshot.items():
             if v["type"] == "git":
                 target_dir = output_dir / Path(path).relative_to("/")
                 local_repo_sha = self.get_local_repo_head_commit(target_dir)
@@ -132,7 +132,7 @@ class ProjectHandler(GithubHandler):
                     repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
                 )
             else:
-                self.app.log.warning(f"Unsupported srcmap type: {v['type']} for {path}")
+                self.app.log.warning(f"Unsupported host type: {v['type']} for {path}")
 
     def fetch_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str) -> Optional[ProjectInfo]:
         """

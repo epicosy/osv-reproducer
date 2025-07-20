@@ -26,3 +26,11 @@ class OSSFuzzIssueReport(BaseModel):
 
         # return default architecture
         return "x86_64"
+
+    @property
+    def range(self) -> list:
+        for param, value in self.regressed_url.query_params():
+            if param == "range":
+                return value.split(":")
+
+        return []

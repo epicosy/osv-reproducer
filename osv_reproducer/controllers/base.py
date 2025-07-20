@@ -108,14 +108,6 @@ class Base(Controller):
             if not project_info:
                 raise OSVReproducerError(f"Could not find project info for {issue_report.project}")
 
-            # TODO: should be part of the object
-            for param, value in issue_report.regressed_url.query_params():
-                if param == "range":
-                    timestamp = value.split(":")[-1]
-                    break
-            else:
-                raise Exception("No range found in query params")
-
             if self.app.pargs.cache_src:
                 base_src_dir = self.app.projects_dir / project_info.name
             else:
@@ -123,22 +115,18 @@ class Base(Controller):
 
             # Step 4: Build the base image of the project
             base_image_tag = self.build_handler.get_project_base_image(project_info.name)
+            timestamp = issue_report.range[-1]
             fuzzer_container_name = f"{issue_report.project}_{timestamp}"
 
             if not self.build_handler.check_container_exists(fuzzer_container_name):
                 # If there is no existing container for the given issue, then get the src
                 sanitizer = issue_report.sanitizer.split(" ")[0]
-                srcmap_file_path = output_dir / f"{issue_report.project}_{timestamp}_srcmap.json"
-                # TODO: saving/loading should be done in the handler
-                if not srcmap_file_path.exists():
-                    # Get srcmap.json
-                    srcmap = self.gcs_handler.get_srcmap(issue_report.project, sanitizer, timestamp, srcmap_file_path)
-                else:
-                    self.app.log.info(f"Using cached srcmap for {self.app.pargs.osv_id}")
-                    with srcmap_file_path.open(mode="r") as f:
-                        srcmap = json.load(f)
+                snapshot = self.gcs_handler.get_snapshot(issue_report.project, sanitizer, timestamp)
 
-                self.project_handler.init(project_info, srcmap, base_src_dir)
+                if not snapshot:
+                    raise OSVReproducerError(f"Could not get snapshot for {issue_report.project}@{timestamp}")
+
+                self.project_handler.init(project_info, snapshot, base_src_dir)
 
             out_dir = output_dir / "out"
             fuzzer_container = self.build_handler.get_project_fuzzer_container(
