@@ -1,16 +1,7 @@
-from enum import Enum
 from pathlib import Path
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from sarif_pydantic.sarif import Stack
-
-
-class ReproductionStatus(Enum):
-    """Status of the reproduction process."""
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    SUCCESS = "success"
-    FAILURE = "failure"
 
 
 class CrashInfo(BaseModel):
