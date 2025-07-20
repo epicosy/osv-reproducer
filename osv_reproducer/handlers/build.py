@@ -52,15 +52,16 @@ class BuildHandler(DockerHandler):
             raise BuildError(f"Failed to build project {project_name}: {str(e)}")
 
     def get_project_fuzzer_container(
-            self, project_info: ProjectInfo, project_image: str, issue_report: OSSFuzzIssueReport, src_dir: Path,
-            out_dir: Path, work_dir: Path, extra_args: dict = None,
+            self, container_name, project_lang: str, image_name: str, issue_report: OSSFuzzIssueReport,
+            src_dir: Path, out_dir: Path, work_dir: Path, extra_args: dict = None,
     ) -> Container:
         """
         Run a Docker container for fuzzing a project and display its logs.
 
         Args:
-            project_info: Project information.
-            project_image: Docker image to use.
+            container_name: Container name.
+            project_lang: Project language.
+            image_name: Docker image to use.
             issue_report: OSS-Fuzz issue report.
             src_dir: Working directory for the fuzzer.
             out_dir: Directory for output files.
@@ -74,8 +75,6 @@ class BuildHandler(DockerHandler):
             DockerError: If running the container fails.
         """
         try:
-            container_name = f"{issue_report.project}_{issue_report.id}"
-
             # Check if container with this name already exists
             container = self.check_container_exists(container_name)
 
@@ -94,7 +93,7 @@ class BuildHandler(DockerHandler):
             # Environment variables for the container
             environment = {
                 'FUZZING_ENGINE': issue_report.fuzzing_engine.lower(),
-                'FUZZING_LANGUAGE': project_info.language,
+                'FUZZING_LANGUAGE': project_lang,
                 'SANITIZER': sanitizer,
                 'ARCHITECTURE': issue_report.architecture,
                 'PROJECT_NAME': issue_report.project,
@@ -113,7 +112,7 @@ class BuildHandler(DockerHandler):
 
             # Run the container
             container = self.run_container(
-                image=project_image,
+                image=image_name,
                 container_name=container_name,
                 platform=platform,
                 environment=environment,

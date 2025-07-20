@@ -116,6 +116,8 @@ class Base(Controller):
         output_dir = Path(self.app.pargs.output_dir).expanduser()
 
         try:
+            # Parse the build-extra-args parameter
+            extra_args = parse_key_value_string(self.app.pargs.build_extra_args)
             self.app.log.info(f"Starting reproduction of vulnerability {self.app.pargs.osv_id}")
 
             result = ReproductionResult(osv_id=self.app.pargs.osv_id, output_dir=output_dir)
@@ -174,17 +176,6 @@ class Base(Controller):
             else:
                 raise Exception("No range found in query params")
 
-            sanitizer = issue_report.sanitizer.split(" ")[0]
-            srcmap_file_path = output_dir / f"{issue_report.project}_{timestamp}_srcmap.json"
-
-            if not srcmap_file_path.exists():
-                # Get srcmap.json
-                srcmap = self.gcs_handler.get_srcmap(issue_report.project, sanitizer, timestamp, srcmap_file_path)
-            else:
-                self.app.log.info(f"Using cached srcmap for {self.app.pargs.osv_id}")
-                with srcmap_file_path.open(mode="r") as f:
-                    srcmap = json.load(f)
-
             if self.app.pargs.cache_src:
                 base_src_dir = self.app.projects_dir / project_info.name
             else:
@@ -193,31 +184,27 @@ class Base(Controller):
             # Step 4: Build the base image of the project
             base_image_tag = self.build_handler.get_project_base_image(project_info.name)
 
-            # Parse the build-extra-args parameter
-            extra_args = parse_key_value_string(self.app.pargs.build_extra_args)
-            out_dir = output_dir / "out"
+            fuzzer_container_name = f"{issue_report.project}_{timestamp}"
 
-            if not self.build_handler.check_container_exists(f"{issue_report.project}_{issue_report.id}"):
+            if not self.build_handler.check_container_exists(fuzzer_container_name):
                 # If there is no existing container for the given issue, then get the src
-                for path, v in srcmap.items():
-                    if v["type"] == "git":
-                        target_dir = base_src_dir / Path(path).relative_to("/")
-                        local_repo_sha = self.github_handler.get_local_repo_head_commit(target_dir)
+                sanitizer = issue_report.sanitizer.split(" ")[0]
+                srcmap_file_path = output_dir / f"{issue_report.project}_{timestamp}_srcmap.json"
 
-                        if local_repo_sha and v["rev"] == local_repo_sha:
-                            self.app.log.info(
-                                f"Using cached repository at {local_repo_sha} for {self.app.pargs.osv_id} in {target_dir}")
-                            continue
+                if not srcmap_file_path.exists():
+                    # Get srcmap.json
+                    srcmap = self.gcs_handler.get_srcmap(issue_report.project, sanitizer, timestamp, srcmap_file_path)
+                else:
+                    self.app.log.info(f"Using cached srcmap for {self.app.pargs.osv_id}")
+                    with srcmap_file_path.open(mode="r") as f:
+                        srcmap = json.load(f)
 
-                        self.github_handler.clone_repository(
-                            repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
-                        )
+                self.project_handler.init(project_info, srcmap, base_src_dir)
 
-                self.project_handler.init(project_info, base_src_dir)
-
+            out_dir = output_dir / "out"
             fuzzer_container = self.build_handler.get_project_fuzzer_container(
-                project_info, base_image_tag, issue_report, src_dir=base_src_dir / "src", out_dir=out_dir,
-                work_dir=output_dir / "work", extra_args=extra_args
+                fuzzer_container_name, project_info.language, image_name=base_image_tag, issue_report=issue_report,
+                src_dir=base_src_dir / "src", out_dir=out_dir, work_dir=output_dir / "work", extra_args=extra_args
             )
 
             if self.build_handler.check_container_exit_code(fuzzer_container) != 0:

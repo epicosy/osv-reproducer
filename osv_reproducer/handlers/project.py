@@ -110,7 +110,7 @@ class ProjectHandler(GithubHandler):
             self.app.log.error(f"Error saving project files: {e}")
             return False
 
-    def init(self, project_info: ProjectInfo, output_dir: Path):
+    def init(self, project_info: ProjectInfo, srcmap: Dict[str, dict], output_dir: Path):
         src_dir = output_dir / "src"
         src_dir.mkdir(exist_ok=True, parents=True)
         build_file_path = self.app.projects_dir / project_info.name / "build.sh"
@@ -118,6 +118,20 @@ class ProjectHandler(GithubHandler):
         if build_file_path.exists():
             # copy the file to the src_dir
             shutil.copy(build_file_path, src_dir)
+
+        for path, v in srcmap.items():
+            if v["type"] == "git":
+                target_dir = output_dir / Path(path).relative_to("/")
+                local_repo_sha = self.get_local_repo_head_commit(target_dir)
+
+                if local_repo_sha and v["rev"] == local_repo_sha:
+                    self.app.log.info(
+                        f"Using cached repository at {local_repo_sha} for {self.app.pargs.osv_id} in {target_dir}")
+                    continue
+
+                self.clone_repository(
+                    repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
+                )
 
     def get_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str, oss_fuzz_ref: str) -> Optional[ProjectInfo]:
         """
