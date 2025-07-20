@@ -1,6 +1,5 @@
 import json
 
-from tqdm import tqdm
 from pathlib import Path
 from cement import Controller, ex
 from cement.utils.version import get_version_banner
@@ -47,45 +46,6 @@ class Base(Controller):
     def _default(self):
         """Default action if no sub-command is passed."""
         self.app.args.print_help()
-
-    @ex(
-        help='Initialize OSV Reproducer by fetching OSS-Fuzz project data',
-        arguments=[
-            (['-s', '--sha'], {
-                'help': 'Version of the OSS-Fuzz project', 'type': str, 'required': False,
-                'default': "20a387d78148c14dd5243ea1b16164fe08b73884"
-            }),
-        ]
-    )
-    def init(self):
-        """
-            This command fetches information for each OSS-Fuzz project and saves it under ~/.osv-reproducer.
-            It also fetches and saves the build.sh and Dockerfile for each project.
-        """
-        self.app.log.info("Fetching OSS-Fuzz project data...")
-
-        # Get OSS-Fuzz repository
-        oss_fuzz_ref = self.app.pargs.sha
-        assert oss_fuzz_ref is not None, f"oss_fuzz_ref needs to be specified"
-
-        oss_fuzz_repo = self.github_handler.client.get_repo(owner="google", project="oss-fuzz")
-
-        if not oss_fuzz_repo:
-            self.app.log.error("No repo found for OSS-Fuzz project")
-            exit(1)
-
-        # TODO: make it load beyond 1000 entries
-        projects_folder = oss_fuzz_repo.repo.get_contents("projects", oss_fuzz_ref)
-        projects = {}
-
-        # Process each project
-        for project_content_file in tqdm(projects_folder, total=len(projects_folder)):
-            project_info = self.project_handler.get_oss_fuzz_project(oss_fuzz_repo, project_content_file.path, oss_fuzz_ref)
-
-            if project_info:
-                projects[project_info.repo_path] = project_info
-
-        self.app.log.info(f"Fetched {len(projects)} projects...")
 
     @ex(
         help='Reproduce a given OSS-Fuzz vulnerability in the OSV database.',
@@ -146,14 +106,9 @@ class Base(Controller):
             project_info = self.project_handler.get_project_info_by_name(issue_report.project)
 
             if not project_info:
-                self.app.log.info(f"Fetching from GitHub the project info for {issue_report.project}")
-                oss_fuzz_repo = self.github_handler.client.get_repo(owner="google", project="oss-fuzz")
-                project_info = self.project_handler.get_oss_fuzz_project(
-                    oss_fuzz_repo, f"projects/{issue_report.project}", "20a387d78148c14dd5243ea1b16164fe08b73884"
-                )
-                if not project_info:
-                    raise OSVReproducerError(f"Could not find project info for {issue_report.project}")
+                raise OSVReproducerError(f"Could not find project info for {issue_report.project}")
 
+            # TODO: should be part of the object
             for param, value in issue_report.regressed_url.query_params():
                 if param == "range":
                     timestamp = value.split(":")[-1]
@@ -168,14 +123,13 @@ class Base(Controller):
 
             # Step 4: Build the base image of the project
             base_image_tag = self.build_handler.get_project_base_image(project_info.name)
-
             fuzzer_container_name = f"{issue_report.project}_{timestamp}"
 
             if not self.build_handler.check_container_exists(fuzzer_container_name):
                 # If there is no existing container for the given issue, then get the src
                 sanitizer = issue_report.sanitizer.split(" ")[0]
                 srcmap_file_path = output_dir / f"{issue_report.project}_{timestamp}_srcmap.json"
-
+                # TODO: saving/loading should be done in the handler
                 if not srcmap_file_path.exists():
                     # Get srcmap.json
                     srcmap = self.gcs_handler.get_srcmap(issue_report.project, sanitizer, timestamp, srcmap_file_path)

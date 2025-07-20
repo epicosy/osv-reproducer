@@ -24,11 +24,10 @@ class GithubHandler(HandlersInterface, Handler):
     def _setup(self, app):
         super()._setup(app)
 
-        tokens_section = self.app.config.get_section_dict("tokens")
-        github_token = tokens_section.get("github")
-
+        self.config = self.app.config.get("handlers", "github")
+        token = self.config.get("token", None)
+        self.client = GitClient(token)
         self._cache: Dict[str, GitRepo] = {}
-        self.client = GitClient(github_token)
 
     def get_repo_id(self, owner: str, project: str) -> int:
         repo_path = f"{owner}/{project}"
@@ -44,6 +43,9 @@ class GithubHandler(HandlersInterface, Handler):
         return self._cache[repo_path].id
 
     def get_local_repo_head_commit(self, repo_path: Path) -> Optional[str]:
+        if not repo_path.exists():
+            return None
+
         repo = git.Repo(repo_path)
 
         if repo_path.exists():

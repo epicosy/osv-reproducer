@@ -20,8 +20,11 @@ osv_reproducer:
 ### The output handler label
 # output_handler: jinja2
 
-tokens:
-  github: "<YOUR_TOKEN_HERE>"
+handlers:
+  github:
+    token: "<YOUR_TOKEN_HERE>"
+  project:
+    oss_fuzz_repo_sha: "20a387d78148c14dd5243ea1b16164fe08b73884"
 
 
 log.colorlog:

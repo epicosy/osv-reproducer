@@ -23,6 +23,11 @@ class ProjectHandler(GithubHandler):
 
     def _setup(self, app):
         super()._setup(app)
+        self.config = self.app.config.get("handlers", "project")
+
+        if not "oss_fuzz_repo_sha" in self.config:
+            self.app.log.warning(f"'oss_fuzz_repo_sha' key not found in config file, using 'main'")
+            self.config["oss_fuzz_repo_sha"] = "main"
 
     def _load_existing_project_info(self, project_info_path: Path) -> Optional[ProjectInfo]:
         """Load existing project info from a JSON file."""
@@ -88,19 +93,13 @@ class ProjectHandler(GithubHandler):
             project_content_files = oss_fuzz_repo.repo.get_contents(project_git_path, oss_fuzz_ref)
 
             for project_file in project_content_files:
-                if project_file.path.endswith("build.sh"):
-                    # Save build script
-                    project_build_script_path = project_dir / "build.sh"
+                if project_file.path.endswith("project.yaml"):
+                    continue
 
-                    with project_build_script_path.open(mode="w") as f:
-                        f.write(project_file.decoded_content.decode("utf-8"))
+                project_file_path = project_dir / project_file.name
 
-                if project_file.path.endswith("Dockerfile"):
-                    # Save Dockerfile
-                    project_docker_file_path = project_dir / "Dockerfile"
-
-                    with project_docker_file_path.open(mode="w") as f:
-                        f.write(project_file.decoded_content.decode("utf-8"))
+                with project_file_path.open(mode="w") as f:
+                    f.write(project_file.decoded_content.decode("utf-8"))
 
             return True
         except UnknownObjectException as uoe:
@@ -132,15 +131,16 @@ class ProjectHandler(GithubHandler):
                 self.clone_repository(
                     repo_url=v["url"], commit=v["rev"], target_dir=target_dir,
                 )
+            else:
+                self.app.log.warning(f"Unsupported srcmap type: {v['type']} for {path}")
 
-    def get_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str, oss_fuzz_ref: str) -> Optional[ProjectInfo]:
+    def fetch_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str) -> Optional[ProjectInfo]:
         """
         Process a single OSS-Fuzz project.
 
         Args:
             oss_fuzz_repo: The OSS-Fuzz repository object.
             project_git_path: The path to the project in the GitHub repository.
-            oss_fuzz_ref: The OSS-Fuzz reference (branch, tag, or commit).
 
         Returns:
             A ProjectInfo object if successful, None otherwise.
@@ -162,7 +162,8 @@ class ProjectHandler(GithubHandler):
         self.app.log.info(f"Fetching {project_name}...")
 
         # Fetch and parse project YAML
-        project_info_dict = self._fetch_project_yaml(oss_fuzz_repo, project_git_path, oss_fuzz_ref)
+        project_info_dict = self._fetch_project_yaml(oss_fuzz_repo, project_git_path, self.config["oss_fuzz_repo_sha"])
+
         if not project_info_dict:
             return None
 
@@ -193,7 +194,7 @@ class ProjectHandler(GithubHandler):
         self._save_project_info(project_info_dict, project_info_path)
 
         # Save project files
-        if self._save_project_files(oss_fuzz_repo, project_git_path, project_dir, oss_fuzz_ref):
+        if self._save_project_files(oss_fuzz_repo, project_git_path, project_dir, self.config["oss_fuzz_repo_sha"]):
             # Create ProjectInfo object
             return ProjectInfo(**project_info_dict)
 
@@ -211,10 +212,14 @@ class ProjectHandler(GithubHandler):
         return None
 
     def get_project_info_by_name(self, name: str) -> Optional[ProjectInfo]:
-        # TODO: check also if the project is in the oss-fuzz repo and fetch
         project_info = self._load_existing_project_info(self.app.projects_dir / name / "project.json")
 
         if project_info:
             return project_info
 
-        return None
+        self.app.log.info(f"Fetching from GitHub the project info for {name}")
+        oss_fuzz_repo = self.client.get_repo(owner="google", project="oss-fuzz")
+
+        project_info = self.fetch_oss_fuzz_project(oss_fuzz_repo, f"projects/{name}")
+
+        return project_info
