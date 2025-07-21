@@ -3,10 +3,12 @@ import tempfile
 
 from pathlib import Path
 from cement import Handler
+from datetime import datetime
 from typing import Dict, Optional
 
 from gitlib import GitClient
 from git import GitCommandError
+from gitlib.github.commit import GitCommit
 from gitlib.github.repository import GitRepo
 
 from ..core.exc import GitHubError
@@ -41,6 +43,25 @@ class GithubHandler(HandlersInterface, Handler):
             self._cache[repo_path] = repo
 
         return self._cache[repo_path].id
+
+    def get_commit(self, owner: str, project: str, version: str) -> GitCommit:
+        repo_path = f"{owner}/{project}"
+
+        if repo_path not in self._cache:
+            repo = self.client.get_repo(owner, project)
+
+            if repo is None:
+                raise GitHubError(f"Repository {repo_path} not found.")
+
+            self._cache[repo_path] = repo
+
+        self.app.log.info(f"Getting timestamp for {repo_path}@{version}")
+        git_commit = self._cache[repo_path].get_commit(version)
+
+        if git_commit is None:
+            raise GitHubError(f"{repo_path}@{version} not found.")
+
+        return git_commit
 
     def get_local_repo_head_commit(self, repo_path: Path) -> Optional[str]:
         if not repo_path.exists():

@@ -21,11 +21,14 @@ class RunnerHandler(DockerHandler):
     def _setup(self, app):
         super()._setup(app)
 
-    def reproduce(self, test_case_path: Path, issue_report: OSSFuzzIssueReport, out_dir: Path) -> Optional[CrashInfo]:
+    def reproduce(
+            self, container_name: str, test_case_path: Path, issue_report: OSSFuzzIssueReport, out_dir: Path
+    ) -> Optional[CrashInfo]:
         """
         Run a Docker container to reproduce a crash using a test case.
 
         Args:
+            container_name: Container name.
             test_case_path: Path to the test case file.
             issue_report: OSS-Fuzz issue report.
             out_dir: Directory for output files.
@@ -37,7 +40,6 @@ class RunnerHandler(DockerHandler):
             DockerError: If running the container fails.
         """
         try:
-            container_name = f"{issue_report.project}_{issue_report.id}_crash"
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
             out_dir.mkdir(exist_ok=True)
             crash_info_file = out_dir / "crash_info.json"
