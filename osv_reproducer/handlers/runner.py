@@ -44,6 +44,8 @@ class RunnerHandler(DockerHandler):
             out_dir.mkdir(exist_ok=True)
             crash_info_file = out_dir / "crash_info.json"
 
+            # TODO: check if the issue_report.fuzz_target exists under the out_dir
+
             if crash_info_file.exists():
                 with crash_info_file.open(mode="r") as f:
                     crash_info_dict = json.load(f)

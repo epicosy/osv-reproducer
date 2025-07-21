@@ -184,7 +184,9 @@ class Base(Controller):
         base_image_tag = self.build_handler.get_project_base_image(context.project_info.name)
 
         if not self.build_handler.check_container_exists(context.fuzzer_container_name):
+            # TODO: should also check for the issue_report.fuzz_target
             # If there is no existing container for the given issue, then get the src
+            # TODO: should check the snapshot against a dependency dict to make sure it includes all dependencies
             self.project_handler.init(context.project_info, context.snapshot, paths_layout.project_path)
 
         fuzzer_container = self.build_handler.get_project_fuzzer_container(
