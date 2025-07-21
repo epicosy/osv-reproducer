@@ -10,11 +10,12 @@ The tool automates the following workflow:
 
 1. Fetch OSV record by ID
 2. Extract metadata (project name, vulnerable commit, fixed commit, etc.)
-3. Retrieve OSS-Fuzz artifacts
-4. Prepare versioned environment
-5. Build and verify the vulnerable version
-6. Build and verify the fixed version
-7. Generate a differential report
+3. Retrieve OSS-Fuzz artifacts (test case, issue report)
+4. Prepare the versioned environment (clone repository at specific commit)
+5. Build and run the vulnerable version with the test case
+6. Verify if the test case crashes the program and matches the issue report
+7. Build and run the fixed version with the test case
+8. Verify if the fix addresses the vulnerability
 
 ## Installation
 
@@ -24,23 +25,46 @@ pip install osv-reproducer
 
 ## Usage
 
+OSV Reproducer provides two main commands:
+
+- `reproduce`: Reproduces a vulnerability by building the vulnerable version and running it with the test case
+- `verify`: Verifies if a fix addresses a vulnerability by building the fixed version and running it with the test case
+
 ### Basic Usage
 
 ```bash
-osv-reproducer reproduce OSV-2023-XXXX
+# Reproduce a vulnerability
+osv-reproducer -oid OSV-2023-XXXX reproduce
+
+# Verify a fix
+osv-reproducer -oid OSV-2023-XXXX verify
 ```
 
 ### Options
 
 ```bash
-# Specify output directory for artifacts
-osv-reproducer reproduce OSV-2023-XXXX --output-dir ./results
+# Required arguments
+-oid, --osv_id          Identifier of the vulnerability in the OSV database (e.g., OSV-2023-XXXX)
 
-# Keep Docker containers after reproduction
-osv-reproducer reproduce OSV-2023-XXXX --keep-containers
+# Optional arguments
+-v, --version           Show version information
+-vb, --verbose          Enable verbose output
+-o, --output-dir        Directory to store output artifacts (default: ./osv-results)
+--build-extra-args      Additional build arguments to pass to the fuzzer container as environment variables
+                        Format: 'KEY1:VALUE1|KEY2:VALUE2'
+```
 
-# Verbose output
-osv-reproducer reproduce OSV-2023-XXXX --verbose
+### Examples
+
+```bash
+# Reproduce a vulnerability with verbose output and custom output directory
+osv-reproducer -vb -o ~/path/to/results/OSV-2023-1276 -oid OSV-2023-1276 reproduce
+
+# Verify a fix with verbose output and custom output directory
+osv-reproducer -vb -o ~/path/to/results/OSV-2023-1276_fix -oid OSV-2023-1276 verify
+
+# Reproduce with additional build arguments
+osv-reproducer -vb -o ~/path/to/results/OSV-2021-1361 -oid OSV-2021-1361 --build-extra-args "CFLAGS:-Werror,-Wunused-but-set-variable|CXXFLAGS:-Werror,-Wunused-but-set-variable" reproduce
 ```
 
 ## Workflow
@@ -51,10 +75,34 @@ graph TD
     B --> C[Extract Metadata]
     C --> D[Retrieve OSS-Fuzz Artifacts]
     D --> E[Prepare Versioned Environment]
-    E --> F[Build & Verify Vulnerable Version]
-    F --> G[Build & Verify Fixed Version]
-    G --> H[Generate Differential Report]
+    
+    subgraph Reproduction Mode
+        E --> F[Build Vulnerable Version]
+        F --> G[Run Test Case]
+        G --> H[Verify Crash]
+    end
+    
+    subgraph Verification Mode
+        E --> I[Build Fixed Version]
+        I --> J[Run Test Case]
+        J --> K[Verify No Crash]
+    end
 ```
+
+## Architecture
+
+OSV Reproducer is built using the Cement framework and follows a modular architecture with handlers for different functionalities:
+
+- **BuildHandler**: Builds Docker images and runs containers for fuzzing projects
+- **DockerHandler**: Provides core Docker functionality
+- **GCSHandler**: Interacts with Google Cloud Storage to retrieve project snapshots
+- **GithubHandler**: Interacts with GitHub repositories to retrieve commits
+- **OSSFuzzHandler**: Interacts with OSS-Fuzz to retrieve issue reports and test cases
+- **OSVHandler**: Interacts with the OSV API to retrieve vulnerability records
+- **ProjectHandler**: Manages project information and initialization
+- **RunnerHandler**: Reproduces crashes and verifies them
+
+This modular approach allows for flexibility in how core behaviors are implemented or swapped out, even at runtime or by user command-line options.
 
 ## Requirements
 
