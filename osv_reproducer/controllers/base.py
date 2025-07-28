@@ -289,3 +289,31 @@ class Base(Controller):
             self.app.pargs.osv_id, mode=ReproductionMode.FIX, build_extra_args=self.app.pargs.build_extra_args,
             output_dir=self.app.pargs.output_dir
         )
+
+    @ex(help='Checkout (at crash commit) the project for a given OSV vulnerability (useful for downstream tasks).')
+    def checkout(self):
+        self.app.log.info(f"Starting checkout for {self.app.pargs.osv_id}")
+
+        if not self.app.pargs.output_dir:
+            raise OSVReproducerError("Output directory is required for checkout")
+
+        context = self._get_context(self.app.pargs.osv_id, mode=ReproductionMode.CRASH)
+
+        output_dir = Path(self.app.pargs.output_dir).expanduser()
+        target_key = f"/src/{context.project_info.name}"
+
+        if target_key not in context.snapshot:
+            raise OSVReproducerError(f"Could not find {target_key} in snapshot")
+
+        snapshot = {
+            f"/{context.project_info.name}": context.snapshot[target_key]
+        }
+
+        self.project_handler.init(context.project_info, snapshot, output_dir, False)
+
+        project_path = output_dir / context.project_info.name
+
+        if not project_path.exists():
+            raise OSVReproducerError(f"Could not checkout project {context.project_info.name} for {self.app.pargs.osv_id}")
+
+        self.app.log.info(f"Successfully checked out project {context.project_info.name} for {self.app.pargs.osv_id}")

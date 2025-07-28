@@ -109,14 +109,15 @@ class ProjectHandler(GithubHandler):
             self.app.log.error(f"Error saving project files: {e}")
             return False
 
-    def init(self, project_info: ProjectInfo, snapshot: Dict[str, dict], output_dir: Path):
-        src_dir = output_dir / "src"
-        src_dir.mkdir(exist_ok=True, parents=True)
-        build_file_path = self.app.projects_dir / project_info.name / "build.sh"
+    def init(self, project_info: ProjectInfo, snapshot: Dict[str, dict], output_dir: Path, copy_build: bool = True):
+        if copy_build:
+            src_dir = output_dir / "src"
+            src_dir.mkdir(exist_ok=True, parents=True)
+            build_file_path = self.app.projects_dir / project_info.name / "build.sh"
 
-        if build_file_path.exists():
-            # copy the file to the src_dir
-            shutil.copy(build_file_path, src_dir)
+            if build_file_path.exists():
+                # copy the file to the src_dir
+                shutil.copy(build_file_path, src_dir)
 
         for path, v in snapshot.items():
             if v["type"] == "git":
