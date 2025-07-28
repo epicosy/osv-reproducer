@@ -131,7 +131,7 @@ class RunnerHandler(DockerHandler):
             )
 
         # Check size
-        if crash_info.size != issue_report.crash_info.size:
+        if issue_report.crash_info.size and crash_info.size != issue_report.crash_info.size:
             verification_result.error_messages.append(
                 f"Size mismatch: {crash_info.size} != {issue_report.crash_info.size}"
             )
@@ -146,17 +146,32 @@ class RunnerHandler(DockerHandler):
         # Check if we have at least one frame to compare
         if report_frames_count == 0 or len(crash_info.stack.frames) == 0:
             verification_result.error_messages.append("No stack frames to compare")
+            return verification_result
+
+        # Check if we need to shift the crash_info stack frames
+        # This handles cases where the first frame could be a sanitizer function (like __asan_memcpy)
+        shift = 0
+        if len(crash_info.stack.frames) > 1:
+            report_first_frame = issue_report.crash_info.stack.frames[0].location.logical_locations[0].name
+            crash_first_frame = crash_info.stack.frames[0].location.logical_locations[0].name
+
+            if report_first_frame != crash_first_frame:
+                # Try to match the first report frame with the second crash frame
+                crash_second_frame = crash_info.stack.frames[1].location.logical_locations[0].name
+                if report_first_frame == crash_second_frame:
+                    self.app.log.info(f"First frame did not match, shifting stack frames by 1")
+                    shift = 1
 
         # Compare stack frames (only as many as in the OSSFuzzIssueReport)
-        for i in range(min(report_frames_count, len(crash_info.stack.frames))):
+        for i in range(min(report_frames_count, len(crash_info.stack.frames) - shift)):
             report_frame_name = issue_report.crash_info.stack.frames[i].location.logical_locations[0].name
-            crash_frame_name = crash_info.stack.frames[i].location.logical_locations[0].name
+            crash_frame_name = crash_info.stack.frames[i + shift].location.logical_locations[0].name
 
             if report_frame_name != crash_frame_name:
                 message = f"Stack frame {i} mismatch: {crash_frame_name} != {report_frame_name}"
                 self.app.log.warning(message)
 
-                # If it's the first frame and it doesn't match, return failure
+                # If it's the first frame and it doesn't match, add an error message
                 if i == 0:
                     verification_result.error_messages.append(message)
 

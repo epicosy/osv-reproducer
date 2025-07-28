@@ -5,6 +5,15 @@ from osv_reproducer.utils.parse.log import parse_reproduce_logs_to_dict
 
 # Global configuration for test data
 LOG_FILES = {
+    'OSV-2020-55.txt': {
+        'impact': 'stack-buffer-overflow',
+        'operation': 'WRITE',
+        'size': 52545,
+        'address': '0x7f2ec015cb05',
+        'first_frame_function': '__asan_memcpy',
+        'first_frame_module': '/src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3',
+        'num_frames': 12
+    },
     'OSV-2021-1204.txt': {
         'impact': 'heap-buffer-overflow',
         'operation': 'WRITE',

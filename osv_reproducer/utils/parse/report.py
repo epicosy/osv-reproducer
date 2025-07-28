@@ -50,11 +50,17 @@ def parse_crash_type(crash_type: str) -> Dict[str, Any]:
         result['operation'] = op_size_match.group(1)
         result['size'] = int(op_size_match.group(2))
     else:
-        # Extract operation only (e.g., "READ" in "UNKNOWN READ")
-        op_match = re.search(r'([A-Z]+)$', crash_type)
-        if op_match:
-            result['operation'] = op_match.group(1)
+        # Check for the {*} placeholder which means size unknown (set to None)
+        op_placeholder_match = re.search(r'([A-Z]+) \{\*\}', crash_type)
+        if op_placeholder_match:
+            result['operation'] = op_placeholder_match.group(1)
             result['size'] = None
+        else:
+            # Extract operation only (e.g., "READ" in "UNKNOWN READ")
+            op_match = re.search(r'([A-Z]+)$', crash_type)
+            if op_match:
+                result['operation'] = op_match.group(1)
+                result['size'] = None
 
     return result
 

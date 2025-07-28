@@ -5,6 +5,20 @@ from osv_reproducer.utils.parse.report import parse_oss_fuzz_report_to_dict
 
 # Global configuration for test data
 REPORT_FILES = {
+    'OSV-2020-55.txt': {
+        'project': 'opensc',
+        'fuzzing_engine': 'libFuzzer',
+        'fuzz_target': 'fuzz_pkcs15_reader',
+        'job_type': 'libfuzzer_asan_opensc',
+        'platform_id': 'linux',
+        'sanitizer': 'address (ASAN)',
+        'severity': 'High',
+        'impact': 'stack-buffer-overflow',
+        'operation': 'WRITE',
+        'size': None,
+        'address': '0x7ffe76440645',
+        'crash_state_functions': ['tcos_decipher', 'sc_decipher', 'use_key']
+    },
     'OSV-2021-1204.txt': {
         'project': 'wolfmqtt',
         'fuzzing_engine': 'libFuzzer',

@@ -1,0 +1,23 @@
+ https://oss-fuzz.com/testcase?key=5226571123392512
+
+Project: opensc
+Fuzzing Engine: libFuzzer
+Fuzz Target: fuzz_pkcs15_reader
+Job Type: libfuzzer_asan_opensc
+Platform Id: linux
+
+Crash Type: Stack-buffer-overflow WRITE {*}
+Crash Address: 0x7ffe76440645
+Crash State:
+  tcos_decipher
+  sc_decipher
+  use_key
+
+Sanitizer: address (ASAN)
+
+Recommended Security Severity: High
+
+Regressed: https://oss-fuzz.com/revisions?job=libfuzzer_asan_opensc&range=202005060308:202005070034
+
+Reproducer Testcase: https://oss-fuzz.com/download?testcase_id=5226571123392512
+

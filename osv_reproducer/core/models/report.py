@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, AnyHttpUrl
 
 from .result import CrashInfo
@@ -11,7 +12,7 @@ class OSSFuzzIssueReport(BaseModel):
     job_type: str
     platform_id: str
     sanitizer: str
-    severity: str
+    severity: Optional[str] = None
     testcase_url: AnyHttpUrl
     regressed_url: AnyHttpUrl
     crash_info: CrashInfo
