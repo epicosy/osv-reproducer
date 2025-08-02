@@ -5,6 +5,15 @@ from osv_reproducer.utils.parse.log import parse_reproduce_logs_to_dict
 
 # Global configuration for test data
 LOG_FILES = {
+    'OSV-2017-104.txt': {
+        'impact':  'heap-buffer-overflow',
+        'operation': 'WRITE',
+        'size': 1,
+        'address': '0x7f9a796b6800',
+        'first_frame_function': 'Unpack::CopyString',
+        'first_frame_module': '/src/unrar/./unpackinline.cpp:65:28',
+        'num_frames': 13
+    },
     'OSV-2020-55.txt': {
         'impact': 'stack-buffer-overflow',
         'operation': 'WRITE',

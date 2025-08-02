@@ -63,7 +63,8 @@ class RunnerHandler(DockerHandler):
             environment = {
                 'HELPER': 'True',
                 'ARCHITECTURE': issue_report.architecture,
-                'RUN_FUZZER_MODE': 'interactive'  # to store the output from the fuzzer
+                'RUN_FUZZER_MODE': 'interactive',  # to store the output from the fuzzer
+                'SANITIZER': issue_report.sanitizer.split(" ")[0]
             }
 
             # Volumes to mount
@@ -156,11 +157,20 @@ class RunnerHandler(DockerHandler):
             crash_first_frame = crash_info.stack.frames[0].location.logical_locations[0].name
 
             if report_first_frame != crash_first_frame:
-                # Try to match the first report frame with the second crash frame
-                crash_second_frame = crash_info.stack.frames[1].location.logical_locations[0].name
-                if report_first_frame == crash_second_frame:
-                    self.app.log.info(f"First frame did not match, shifting stack frames by 1")
-                    shift = 1
+                # Try to find a matching frame by shifting through the crash frames
+                match_found = False
+                for potential_shift in range(1, len(crash_info.stack.frames)):
+                    crash_frame = crash_info.stack.frames[potential_shift].location.logical_locations[0].name
+                    if report_first_frame == crash_frame:
+                        self.app.log.info(f"First frame did not match, shifting stack frames by {potential_shift}")
+                        shift = potential_shift
+                        match_found = True
+                        break
+
+                if not match_found:
+                    verification_result.error_messages.append(
+                        "No matching stack frames found after shifting through all frames"
+                    )
 
         # Compare stack frames (only as many as in the OSSFuzzIssueReport)
         for i in range(min(report_frames_count, len(crash_info.stack.frames) - shift)):

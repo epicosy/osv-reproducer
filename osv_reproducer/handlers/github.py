@@ -1,10 +1,13 @@
 import git
 import tempfile
+import subprocess
 
 from pathlib import Path
+
 from cement import Handler
 from datetime import datetime
 from typing import Dict, Optional
+from github.GithubException import BadCredentialsException
 
 from gitlib import GitClient
 from git import GitCommandError
@@ -29,6 +32,12 @@ class GithubHandler(HandlersInterface, Handler):
         self.config = self.app.config.get("handlers", "github")
         token = self.config.get("token", None)
         self.client = GitClient(token)
+
+        try:
+            remaining = self.client.remaining
+        except BadCredentialsException:
+            raise GitHubError("Failed to initialize GitHub client. Check your token and try again.")
+
         self._cache: Dict[str, GitRepo] = {}
 
     def get_repo_id(self, owner: str, project: str) -> int:
@@ -106,27 +115,11 @@ class GithubHandler(HandlersInterface, Handler):
     def clone_repository(
             self, repo_url: str, commit: str, target_dir: Optional[Path] = None, shallow: bool = True,
     ) -> str:
-        """
-        Clone a GitHub repository at a specific commit.
-
-        Args:
-            repo_url: URL of the repository.
-            commit: Commit hash to checkout.
-            target_dir: Directory to clone the repository to. If None, creates a temporary directory.
-            shallow: Whether to perform a shallow clone.
-
-        Returns:
-            str: Path to the cloned repository.
-
-        Raises:
-            GitHubError: If cloning the repository fails.
-        """
         to_clone = True
 
         try:
-            # Create target directory if it doesn't exist
             if target_dir is None:
-                target_dir = tempfile.mkdtemp(prefix="osv-repo-")
+                target_dir = Path(tempfile.mkdtemp(prefix="osv-repo-"))
             elif not target_dir.exists():
                 target_dir.mkdir(parents=True, exist_ok=True)
             else:
@@ -134,9 +127,7 @@ class GithubHandler(HandlersInterface, Handler):
 
             self.app.log.info(f"Cloning repository {repo_url} at commit {commit} to {target_dir}")
 
-            # Clone the repository
             if shallow:
-                # Shallow clone with depth 1 and specific commit
                 if to_clone:
                     repo = git.Repo.clone_from(
                         repo_url,
@@ -148,12 +139,14 @@ class GithubHandler(HandlersInterface, Handler):
                 repo.git.fetch("origin", commit, depth=1)
                 repo.git.checkout(commit)
             else:
-                # Full clone
                 repo = git.Repo.clone_from(repo_url, target_dir)
                 repo.git.checkout(commit)
 
+                # Initialize submodules (optional: recursive)
+                repo.git.submodule("update", "--init", "--recursive")
+
             self.app.log.info(f"Successfully cloned repository {repo_url} at commit {commit}")
-            return target_dir
+            return str(target_dir)
         except GitCommandError as e:
             self.app.log.error(f"Git command error while cloning {repo_url} at commit {commit}: {str(e)}")
             raise GitHubError(f"Failed to clone repository {repo_url} at commit {commit}: {str(e)}")

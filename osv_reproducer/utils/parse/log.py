@@ -134,25 +134,70 @@ def parse_stack_frame(line: str) -> Optional[Dict[str, Any]]:
     Parse a stack frame line and create a frame dictionary.
 
     Args:
-        line: Stack frame line in the format "#N address in function file"
+        line: Stack frame line in the format "#N address in function file" or "#N address (module)"
 
     Returns:
         dict: Frame dictionary or None if the line couldn't be parsed
     """
-    parts = line.split(" in ", 1)
-    if len(parts) != 2:
+    # Check if the line starts with a frame number
+    if not line.startswith("#"):
         return None
 
-    frame_id = parts[0].strip()  # e.g., "#0 0x55c8c1c740d8"
-    location_part = parts[1].strip()  # e.g., "MqttClient_DecodePacket mqtt_client.c"
+    # Extract the frame ID and address
+    frame_parts = line.split(" ", 2)
+    if len(frame_parts) < 2:
+        return None
 
-    # Extract function and file
-    location_parts = location_part.split(" ", 1)
-    function = location_parts[0]
-    file = location_parts[1] if len(location_parts) > 1 else ""
+    frame_num = frame_parts[0]  # e.g., "#0"
+    address = frame_parts[1]    # e.g., "0x55c8c1c740d8"
 
-    # Create and return a frame dictionary using the common function
-    return create_frame(function, file)
+    # Check if the line has the " in " format
+    if len(frame_parts) > 2 and " in " in line:
+        parts = line.split(" in ", 1)
+        frame_id = parts[0].strip()  # e.g., "#0 0x55c8c1c740d8"
+        location_part = parts[1].strip()  # e.g., "MqttClient_DecodePacket mqtt_client.c"
+
+        # Check if the location part starts with a function name followed by a module in parentheses
+        if location_part.strip().endswith(")") and "(" in location_part and not location_part.strip().startswith("("):
+            # This is likely a function name followed by a module in parentheses
+            # Extract the function name (everything before the first open parenthesis)
+            function_parts = location_part.split("(", 1)
+            function = function_parts[0].strip()
+
+            # The module is everything from the first open parenthesis to the end
+            file = "(" + function_parts[1]
+        # Check if the function name includes a signature (has parentheses)
+        elif "(" in location_part and ")" in location_part and location_part.find("(") < location_part.find(")"):
+            # Extract the function name without the signature
+            function = location_part.split("(", 1)[0].strip()
+            # Extract the file part which comes after the closing parenthesis and a space
+            file_parts = location_part.split(")", 1)
+            file = file_parts[1].strip() if len(file_parts) > 1 else ""
+        else:
+            # Handle the case where there's no signature
+            location_parts = location_part.split(" ", 1)
+            function = location_parts[0].strip()
+            file = location_parts[1].strip() if len(location_parts) > 1 else ""
+    else:
+        # Handle the case where there's no function name (just address)
+        function = ""
+
+        # Check if there's a module part
+        if len(frame_parts) > 2:
+            module_part = frame_parts[2].strip()
+
+            # Keep the module part as is, including parentheses if present
+            file = module_part
+        else:
+            file = address
+
+    # Create a frame dictionary using the common function
+    frame = create_frame(function, file)
+
+    # Add the address as the ID for the frame
+    frame["id"] = address
+
+    return frame
 
 
 def parse_reproduce_logs_to_dict(log_lines: List[str]) -> dict:

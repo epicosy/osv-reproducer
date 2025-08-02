@@ -5,6 +5,20 @@ from osv_reproducer.utils.parse.report import parse_oss_fuzz_report_to_dict
 
 # Global configuration for test data
 REPORT_FILES = {
+    'OSV-2017-104.txt':{
+        'project': 'unrar',
+        'fuzzing_engine': 'libFuzzer',
+        'fuzz_target': 'unrar_fuzzer',
+        'job_type': 'libfuzzer_asan_unrar',
+        'platform_id': 'linux',
+        'sanitizer': 'address (ASAN)',
+        'severity': 'High',
+        'impact': 'heap-buffer-overflow',
+        'operation': 'WRITE',
+        'size': 1,
+        'address': '0x7f0e45e76800',
+        'crash_state_functions': ['Unpack::CopyString', 'Unpack::Unpack5', 'CmdExtract::ExtractCurrentFile']
+    },
     'OSV-2020-55.txt': {
         'project': 'opensc',
         'fuzzing_engine': 'libFuzzer',

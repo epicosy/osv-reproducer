@@ -97,7 +97,7 @@ class OSSFuzzHandler(HandlersInterface, Handler):
 
         # Save the content to the file
         try:
-            with open(testcase_path, 'wb') as f:
+            with testcase_path.open(mode='wb') as f:
                 f.write(content)
 
             self.app.log.info(f"Test case saved to {testcase_path}")
@@ -183,10 +183,10 @@ class OSSFuzzHandler(HandlersInterface, Handler):
                 return None
 
             decoded = response.text.encode('utf-8').decode('unicode_escape')
+            decoded = decoded.replace("Detailed report:", "Detailed Report:")
             data_clean = decoded.split("Detailed Report:")
 
             if len(data_clean) < 2:
-                print(len(data_clean))
                 self.app.log.warning(f"issue content not split by 'Detailed Report:'")
                 return None
 

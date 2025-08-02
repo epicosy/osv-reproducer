@@ -146,7 +146,7 @@ class GCSHandler(HandlersInterface, Handler):
             self.app.log.error(f"Error while listing blobs with prefix {prefix}: {str(e)}")
             raise GCSError(f"Failed to list blobs with prefix {prefix}: {str(e)}")
 
-    def _get_cached_snapshot(self, timestamp: str) -> Optional[dict]:
+    def _get_cached_snapshot(self, project: str, timestamp: str) -> Optional[dict]:
         """
         Check if a snapshot is cached and load it if it exists.
 
@@ -156,7 +156,7 @@ class GCSHandler(HandlersInterface, Handler):
         Returns:
             Optional[dict]: The cached srcmap as a dictionary, or None if not cached.
         """
-        snapshot_file_path = self.app.snapshots_dir / f"{timestamp}.json"
+        snapshot_file_path = self.app.snapshots_dir / project / f"{timestamp}.json"
 
         if snapshot_file_path.exists():
             self.app.log.info(f"Using cached snapshots for {self.app.pargs.osv_id}")
@@ -257,7 +257,7 @@ class GCSHandler(HandlersInterface, Handler):
 
         return srcmap
 
-    def _save_snapshot(self, srcmap: dict, timestamp: str) -> None:
+    def _save_snapshot(self, project_name: str, srcmap: dict, timestamp: str) -> None:
         """
         Save the snapshot to a file.
 
@@ -265,7 +265,11 @@ class GCSHandler(HandlersInterface, Handler):
             srcmap: The srcmap to save.
             timestamp: Timestamp to use in the filename.
         """
-        snapshot_file_path = self.app.snapshots_dir / f"{timestamp}.json"
+        snapshot_file_path = self.app.snapshots_dir / project_name / f"{timestamp}.json"
+
+        if not snapshot_file_path.parent.exists():
+            snapshot_file_path.parent.mkdir(parents=True)
+
         with snapshot_file_path.open(mode="w") as f:
             json.dump(srcmap, f, indent=2)
 
@@ -286,7 +290,7 @@ class GCSHandler(HandlersInterface, Handler):
             GCSError: If downloading the file fails.
         """
         # Check for cached snapshot
-        cached_snapshot = self._get_cached_snapshot(timestamp)
+        cached_snapshot = self._get_cached_snapshot(project_name, timestamp)
         if cached_snapshot:
             return cached_snapshot
 
@@ -311,7 +315,7 @@ class GCSHandler(HandlersInterface, Handler):
             srcmap = self._update_snapshot_version(srcmap, project_name, commit_sha)
 
             # Save the snapshot
-            self._save_snapshot(srcmap, timestamp)
+            self._save_snapshot(project_name, srcmap, timestamp)
 
             return srcmap
 

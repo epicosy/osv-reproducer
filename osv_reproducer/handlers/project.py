@@ -109,16 +109,7 @@ class ProjectHandler(GithubHandler):
             self.app.log.error(f"Error saving project files: {e}")
             return False
 
-    def init(self, project_info: ProjectInfo, snapshot: Dict[str, dict], output_dir: Path, copy_build: bool = True):
-        if copy_build:
-            src_dir = output_dir / "src"
-            src_dir.mkdir(exist_ok=True, parents=True)
-            build_file_path = self.app.projects_dir / project_info.name / "build.sh"
-
-            if build_file_path.exists():
-                # copy the file to the src_dir
-                shutil.copy(build_file_path, src_dir)
-
+    def init(self, project_info: ProjectInfo, snapshot: Dict[str, dict], output_dir: Path, artifacts: dict = None):
         for path, v in snapshot.items():
             if v["type"] == "git":
                 target_dir = output_dir / Path(path).relative_to("/")
@@ -134,6 +125,26 @@ class ProjectHandler(GithubHandler):
                 )
             else:
                 self.app.log.warning(f"Unsupported host type: {v['type']} for {path}")
+
+        if artifacts:
+            src_dir = output_dir / "src"
+
+            for file_path, dest in artifacts.items():
+                file_path_obj = Path(file_path)
+
+                if not file_path_obj.exists():
+                    self.app.log.warning(f"File {file_path} not in {project_info.name}")
+                    continue
+
+                dest_file = Path(dest.replace("/src", str(src_dir)))
+                dest_path = Path(str(dest_file).replace(file_path_obj.name, ""))
+
+                if not dest_path.exists():
+                    self.app.log.warning(f"Destination path {dest_path} not in {project_info.name}")
+                    continue
+
+                # copy the file to the src_dir
+                shutil.copy(file_path, dest_path)
 
     def fetch_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str) -> Optional[ProjectInfo]:
         """

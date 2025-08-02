@@ -1,0 +1,85 @@
++ FUZZER=unrar_fuzzer
++ shift
++ '[' '!' -v TESTCASE ']'
++ TESTCASE=/testcase
++ '[' '!' -f /testcase ']'
++ export RUN_FUZZER_MODE=interactive
++ RUN_FUZZER_MODE=interactive
++ export FUZZING_ENGINE=libfuzzer
++ FUZZING_ENGINE=libfuzzer
++ export SKIP_SEED_CORPUS=1
++ SKIP_SEED_CORPUS=1
++ run_fuzzer unrar_fuzzer -runs=100 /testcase
+vm.mmap_rnd_bits = 28
+/out/unrar_fuzzer -rss_limit_mb=2560 -timeout=25 -runs=100 /testcase < /dev/null
+Running with entropic power schedule (0xFF, 100).
+Seed: 247056012
+Loaded 1 modules   (7028 inline 8-bit counters): 7028 [0x55ce6e7dfe60, 0x55ce6e7e19d4),
+Loaded 1 PC tables (7028 PCs): 7028 [0x55ce6e7e19d8,0x55ce6e7fd118),
+/out/unrar_fuzzer: Running 1 inputs 100 time(s) each.
+Running: /testcase
+=================================================================
+==14==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f9a796b6800 at pc 0x55ce6e653ccd bp 0x7ffc0784b370 sp 0x7ffc0784b368
+WRITE of size 1 at 0x7f9a796b6800 thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+#0 0x55ce6e653ccc in Unpack::CopyString(unsigned int, unsigned int) /src/unrar/./unpackinline.cpp:65:28
+#1 0x55ce6e64f35c in Unpack::UnpackLargeBlock(UnpackThreadData&) /src/unrar/./unpack50mt.cpp
+#2 0x55ce6e64b2e1 in Unpack::Unpack5MT(bool) /src/unrar/./unpack50mt.cpp:208:37
+#3 0x55ce6e6377f6 in CmdExtract::ExtractCurrentFile(Archive&, unsigned long, bool&) /src/unrar/extract.cpp
+#4 0x55ce6e6347f5 in CmdExtract::ExtractArchive() /src/unrar/extract.cpp:199:10
+#5 0x55ce6e633c87 in CmdExtract::DoExtract() /src/unrar/extract.cpp:45:29
+#6 0x55ce6e6301f9 in LLVMFuzzerTestOneInput /src/unrar/unrar_fuzzer.cc:48:15
+#7 0x55ce6e4e4650 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#8 0x55ce6e4cf8c5 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:327:6
+#9 0x55ce6e4d535f in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:862:9
+#10 0x55ce6e500602 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#11 0x7f9a7da88082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 5792732f783158c66fb4f3756458ca24e46e827d)
+#12 0x55ce6e4c7aad in _start (/out/unrar_fuzzer+0x7caad)
+DEDUP_TOKEN: Unpack::CopyString(unsigned int, unsigned int)--Unpack::UnpackLargeBlock(UnpackThreadData&)--Unpack::Unpack5MT(bool)
+0x7f9a796b6800 is located 0 bytes after 1048576-byte region [0x7f9a795b6800,0x7f9a796b6800)
+allocated by thread T0 here:
+#0 0x55ce6e5f041f in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:68:3
+#1 0x55ce6e671703 in Unpack::Init(unsigned long, bool) /src/unrar/unpack.cpp:94:47
+#2 0x55ce6e637487 in CmdExtract::ExtractCurrentFile(Archive&, unsigned long, bool&) /src/unrar/extract.cpp:667:18
+#3 0x55ce6e6347f5 in CmdExtract::ExtractArchive() /src/unrar/extract.cpp:199:10
+#4 0x55ce6e633c87 in CmdExtract::DoExtract() /src/unrar/extract.cpp:45:29
+#5 0x55ce6e6301f9 in LLVMFuzzerTestOneInput /src/unrar/unrar_fuzzer.cc:48:15
+#6 0x55ce6e4e4650 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+#7 0x55ce6e4cf8c5 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:327:6
+#8 0x55ce6e4d535f in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:862:9
+#9 0x55ce6e500602 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+#10 0x7f9a7da88082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 5792732f783158c66fb4f3756458ca24e46e827d)
+DEDUP_TOKEN: __interceptor_malloc--Unpack::Init(unsigned long, bool)--CmdExtract::ExtractCurrentFile(Archive&, unsigned long, bool&)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/unrar/./unpackinline.cpp:65:28 in Unpack::CopyString(unsigned int, unsigned int)
+Shadow bytes around the buggy address:
+0x7f9a796b6580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x7f9a796b6600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x7f9a796b6680: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x7f9a796b6700: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0x7f9a796b6780: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7f9a796b6800:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+0x7f9a796b6880: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+0x7f9a796b6900: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+0x7f9a796b6980: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+0x7f9a796b6a00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+0x7f9a796b6a80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+Addressable:           00
+Partially addressable: 01 02 03 04 05 06 07
+Heap left redzone:       fa
+Freed heap region:       fd
+Stack left redzone:      f1
+Stack mid redzone:       f2
+Stack right redzone:     f3
+Stack after return:      f5
+Stack use after scope:   f8
+Global redzone:          f9
+Global init order:       f6
+Poisoned by user:        f7
+Container overflow:      fc
+Array cookie:            ac
+Intra object redzone:    bb
+ASan internal:           fe
+Left alloca redzone:     ca
+Right alloca redzone:    cb
+==14==ABORTING

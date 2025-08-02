@@ -117,7 +117,7 @@ class Base(Controller):
 
     def _get_context(self, osv_id: str, mode: ReproductionMode) -> ReproductionContext:
         self.app.log.info(f"Fetching OSV record for {osv_id}")
-        osv_record = self.osv_handler.fetch_vulnerability(osv_id)
+        osv_record = self.osv_handler.get_record(osv_id)
 
         if mode == ReproductionMode.FIX and not osv_record.get_git_fixes():
             raise OSVReproducerError(f"No fixes found for {osv_id}")
@@ -187,7 +187,8 @@ class Base(Controller):
             # TODO: should also check for the issue_report.fuzz_target
             # If there is no existing container for the given issue, then get the src
             # TODO: should check the snapshot against a dependency dict to make sure it includes all dependencies
-            self.project_handler.init(context.project_info, context.snapshot, paths_layout.project_path)
+            artifacts = self.build_handler.get_artifacts(context.project_info.name)
+            self.project_handler.init(context.project_info, context.snapshot, paths_layout.project_path, artifacts)
 
         fuzzer_container = self.build_handler.get_project_fuzzer_container(
             context.fuzzer_container_name, context.project_info.language, image_name=base_image_tag,

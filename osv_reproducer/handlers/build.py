@@ -4,6 +4,7 @@ from docker.models.containers import Container
 from ..handlers.docker import DockerHandler
 from ..core.exc import BuildError, DockerError
 from ..core.models import ProjectInfo, OSSFuzzIssueReport
+from ..utils.docker.dockerfile import extract_artifacts_from_dockerfile
 
 
 class BuildHandler(DockerHandler):
@@ -16,6 +17,21 @@ class BuildHandler(DockerHandler):
 
     def _setup(self, app):
         super()._setup(app)
+
+    def get_artifacts(self, project_name: str) -> dict:
+        """
+        Extract artifacts (files being copied or added) from a Dockerfile.
+
+        Args:
+            project_name: Project name.
+
+        Returns:
+            dict: Dictionary with source:destination as key:value pairs of files being copied into the image.
+                  The default $SRC variable is replaced with '/src', other variables are skipped with a warning.
+                  For ADD commands with URLs, the files are downloaded to the project's path.
+        """
+        dockerfile_path = self.app.projects_dir / project_name / "Dockerfile"
+        return extract_artifacts_from_dockerfile(dockerfile_path, self.app.log)
 
     def get_project_base_image(self, project_name: str) -> str:
         """

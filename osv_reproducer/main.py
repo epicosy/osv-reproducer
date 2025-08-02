@@ -63,6 +63,12 @@ class OSVReproducer(App):
         return path
 
     @property
+    def records_dir(self):
+        path = Path.home() / ".osv_reproducer" / "records"
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
+    @property
     def projects_dir(self):
         """
             Return the path to the projects folder.

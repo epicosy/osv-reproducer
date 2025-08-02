@@ -188,6 +188,14 @@ def parse_oss_fuzz_report_to_dict(text: str) -> Dict[str, Any]:
     # Process sections
     parsed = process_sections(sections)
 
+    # Normalize old field names
+    if 'fuzzer' in parsed and 'fuzzing_engine' not in parsed:
+        # the split is for cases such as 'libFuzzer_unrar_fuzzer'
+        parsed['fuzzing_engine'] = parsed.pop('fuzzer').split("_")[0]
+
+    if 'fuzz_target_binary' in parsed and 'fuzz_target' not in parsed:
+        parsed['fuzz_target'] = parsed.pop('fuzz_target_binary')
+
     # Extract crash info
     crash_info = extract_crash_info(parsed)
 
