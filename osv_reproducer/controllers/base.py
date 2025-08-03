@@ -1,6 +1,6 @@
 from pathlib import Path
-from datetime import timedelta
 from cement import Controller, ex
+from datetime import timedelta, datetime
 from cement.utils.version import get_version_banner
 
 from ..core.version import get_version
@@ -132,7 +132,8 @@ class Base(Controller):
         if not test_case_path:
             raise OSVReproducerError(f"Could not get the testcase for {issue_report.id} OSS-Fuzz Issue Report")
 
-        project_info = self.project_handler.get_project_info_by_name(issue_report.project)
+        report_date = datetime.strptime(issue_report.range[-1], "%Y%m%d%H%M")
+        project_info = self.project_handler.get_project_info_by_name(issue_report.project, report_date)
 
         if not project_info:
             raise OSVReproducerError(f"Could not find project info for {issue_report.project}")
@@ -184,7 +185,6 @@ class Base(Controller):
         base_image_tag = self.build_handler.get_project_base_image(context.project_info.name)
 
         if not self.build_handler.check_container_exists(context.fuzzer_container_name):
-            # TODO: should also check for the issue_report.fuzz_target
             # If there is no existing container for the given issue, then get the src
             # TODO: should check the snapshot against a dependency dict to make sure it includes all dependencies
             artifacts = self.build_handler.get_artifacts(context.project_info.name)
@@ -310,7 +310,7 @@ class Base(Controller):
             f"/{context.project_info.name}": context.snapshot[target_key]
         }
 
-        self.project_handler.init(context.project_info, snapshot, output_dir, False)
+        self.project_handler.init(context.project_info, snapshot, output_dir)
 
         project_path = output_dir / context.project_info.name
 

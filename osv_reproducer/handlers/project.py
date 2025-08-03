@@ -1,9 +1,9 @@
 import json
+import yaml
 import shutil
 
-import yaml
-
 from pathlib import Path
+from datetime import datetime
 from typing import Dict, Optional, Tuple, Any
 
 from gitlib.parsers.url.base import GithubUrlParser
@@ -146,13 +146,16 @@ class ProjectHandler(GithubHandler):
                 # copy the file to the src_dir
                 shutil.copy(file_path, dest_path)
 
-    def fetch_oss_fuzz_project(self, oss_fuzz_repo: Any, project_git_path: str) -> Optional[ProjectInfo]:
+    def fetch_oss_fuzz_project(
+            self, oss_fuzz_repo: Any, project_git_path: str, oss_fuzz_repo_sha: str = None
+    ) -> Optional[ProjectInfo]:
         """
         Process a single OSS-Fuzz project.
 
         Args:
             oss_fuzz_repo: The OSS-Fuzz repository object.
             project_git_path: The path to the project in the GitHub repository.
+            oss_fuzz_repo_sha: The SHA of the OSS-Fuzz repository to use.
 
         Returns:
             A ProjectInfo object if successful, None otherwise.
@@ -160,6 +163,9 @@ class ProjectHandler(GithubHandler):
         project_name = project_git_path.split("/")[-1]
         project_dir = self.app.projects_dir / project_name
         project_info_path = project_dir / "project.json"
+
+        if oss_fuzz_repo_sha is None:
+            oss_fuzz_repo_sha = self.config["oss_fuzz_repo_sha"]
 
         # Check if project info already exists
         existing_project_info = self._load_existing_project_info(project_info_path)
@@ -174,7 +180,7 @@ class ProjectHandler(GithubHandler):
         self.app.log.info(f"Fetching {project_name}...")
 
         # Fetch and parse project YAML
-        project_info_dict = self._fetch_project_yaml(oss_fuzz_repo, project_git_path, self.config["oss_fuzz_repo_sha"])
+        project_info_dict = self._fetch_project_yaml(oss_fuzz_repo, project_git_path, oss_fuzz_repo_sha)
 
         if not project_info_dict:
             return None
@@ -206,7 +212,7 @@ class ProjectHandler(GithubHandler):
         self._save_project_info(project_info_dict, project_info_path)
 
         # Save project files
-        if self._save_project_files(oss_fuzz_repo, project_git_path, project_dir, self.config["oss_fuzz_repo_sha"]):
+        if self._save_project_files(oss_fuzz_repo, project_git_path, project_dir, oss_fuzz_repo_sha):
             # Create ProjectInfo object
             return ProjectInfo(**project_info_dict)
 
@@ -223,7 +229,7 @@ class ProjectHandler(GithubHandler):
 
         return None
 
-    def get_project_info_by_name(self, name: str) -> Optional[ProjectInfo]:
+    def get_project_info_by_name(self, name: str, until: datetime = None) -> Optional[ProjectInfo]:
         project_info = self._load_existing_project_info(self.app.projects_dir / name / "project.json")
 
         if project_info:
@@ -231,7 +237,15 @@ class ProjectHandler(GithubHandler):
 
         self.app.log.info(f"Fetching from GitHub the project info for {name}")
         oss_fuzz_repo = self.client.get_repo(owner="google", project="oss-fuzz")
+        repo_sha = None
 
-        project_info = self.fetch_oss_fuzz_project(oss_fuzz_repo, f"projects/{name}")
+        if until:
+            self.app.log.info(f"Fetching commits before {until} for {name}")
+            commits = oss_fuzz_repo.repo.get_commits(until=until)
+            commit = commits[0]
+            repo_sha = commit.sha
+            self.app.log.info(f"Using commit {repo_sha} at {commit.commit.committer.date} for {name}")
+
+        project_info = self.fetch_oss_fuzz_project(oss_fuzz_repo, f"projects/{name}", repo_sha)
 
         return project_info

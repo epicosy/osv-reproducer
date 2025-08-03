@@ -93,10 +93,11 @@ class BuildHandler(DockerHandler):
         try:
             # Check if container with this name already exists
             container = self.check_container_exists(container_name)
+            fuzz_target_path = out_dir / issue_report.fuzz_target
 
             if container:
                 # Check if the container can be reused
-                if self.check_container_exit_status(container):
+                if self.check_container_exit_status(container) and fuzz_target_path.exists():
                     return container
 
             sanitizer = issue_report.sanitizer.split(" ")[0]
