@@ -69,7 +69,7 @@ class BuildHandler(DockerHandler):
 
     def get_project_fuzzer_container(
             self, container_name, project_lang: str, image_name: str, issue_report: OSSFuzzIssueReport,
-            src_dir: Path, out_dir: Path, work_dir: Path, extra_args: dict = None,
+            src_dir: Path, out_dir: Path, work_dir: Path, snapshot: dict, extra_args: dict = None
     ) -> Container:
         """
         Run a Docker container for fuzzing a project and display its logs.
@@ -82,6 +82,7 @@ class BuildHandler(DockerHandler):
             src_dir: Working directory for the fuzzer.
             out_dir: Directory for output files.
             work_dir: Directory for temporary files.
+            snapshot: Dictionary with subfolders to use.
             extra_args: Additional arguments to pass to the fuzzer. If None, uses the default arguments.
 
         Returns:
@@ -123,9 +124,21 @@ class BuildHandler(DockerHandler):
             # Volumes to mount
             volumes = {
                 str(out_dir): {'bind': '/out', 'mode': 'rw'},
-                str(work_dir): {'bind': '/work', 'mode': 'rw'},
-                str(src_dir): {'bind': '/src', 'mode': 'rw'}
+                str(work_dir): {'bind': '/work', 'mode': 'rw'}
             }
+
+            for key, _ in snapshot.items():
+                local_dir = key.replace("/src", str(src_dir))
+                volumes[local_dir] = {'bind': key, 'mode': 'rw'}
+
+            # the above binding also needs to be done for the artifacts (build.sh, scripts, etc.)
+            for src_path in src_dir.iterdir():
+                str_src_path = str(src_path)
+                if str_src_path in volumes:
+                    continue
+
+                container_src_path = str_src_path.replace(str(src_dir), "/src")
+                volumes[str_src_path] = {'bind': container_src_path, 'mode': 'rw'}
 
             # Run the container
             container = self.run_container(

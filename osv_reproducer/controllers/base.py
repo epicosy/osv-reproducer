@@ -193,7 +193,7 @@ class Base(Controller):
         fuzzer_container = self.build_handler.get_project_fuzzer_container(
             context.fuzzer_container_name, context.project_info.language, image_name=base_image_tag,
             issue_report=context.issue_report, src_dir=paths_layout.src, out_dir=paths_layout.out,
-            work_dir=paths_layout.work, extra_args=extra_args
+            work_dir=paths_layout.work, snapshot=context.snapshot, extra_args=extra_args
         )
 
         if self.build_handler.check_container_exit_code(fuzzer_container) != 0:
