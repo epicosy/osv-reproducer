@@ -180,7 +180,7 @@ class ProjectHandler(GithubHandler):
         self.app.log.info(f"Fetching {project_name}...")
 
         # Fetch and parse project YAML
-        project_info_dict = self._fetch_project_yaml(oss_fuzz_repo, project_git_path, oss_fuzz_repo_sha)
+        project_info_dict = self._fetch_project_yaml(oss_fuzz_repo, project_git_path, self.config["oss_fuzz_repo_sha"])
 
         if not project_info_dict:
             return None
