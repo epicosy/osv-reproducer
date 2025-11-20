@@ -33,5 +33,7 @@ class OSSFuzzIssueReport(BaseModel):
         for param, value in self.regressed_url.query_params():
             if param == "range":
                 return value.split(":")
+            if param == "revision":
+                return value.split(":")
 
         return []

@@ -109,6 +109,7 @@ def preprocess_report_text(text: str) -> str:
     text_fmt = text.replace("\n  \n", "\n\n")
     text_fmt = text_fmt.replace("Recommended Security Severity: ", "Severity: ")
     text_fmt = text_fmt.replace("Regressed: ", "Regressed url: ")
+    text_fmt = text_fmt.replace("Crash Revision: ", "Regressed url: ")
     text_fmt = text_fmt.replace("Reproducer Testcase: ", "Testcase url: ")
     return text_fmt
 

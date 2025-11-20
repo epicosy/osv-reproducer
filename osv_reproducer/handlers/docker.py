@@ -136,8 +136,8 @@ class DockerHandler(HandlersInterface, Handler):
     def run_container(
             self, image: str, container_name: str, command: Optional[List[str]] = None,
             environment: Optional[Dict[str, str]] = None, volumes: Optional[Dict[str, Dict[str, str]]] = None,
-            platform: str = 'linux/amd64', privileged: bool = True, shm_size: str = '2g',
-            detach: bool = True, tty: bool = False, stdin_open: bool = True
+            platform: str = 'linux/amd64', privileged: bool = True, shm_size: str = '2g', detach: bool = True,
+            tty: bool = False, stdin_open: bool = True, remove: bool = False,
     ) -> Container:
         """
         Run a Docker container with the given parameters.
@@ -154,6 +154,7 @@ class DockerHandler(HandlersInterface, Handler):
             detach: Whether to run the container in detached mode.
             tty: Whether to allocate a pseudo-TTY.
             stdin_open: Whether to keep STDIN open.
+            remove: Whether to remove the container when it exits.
 
         Returns:
             Container object.
@@ -162,7 +163,7 @@ class DockerHandler(HandlersInterface, Handler):
             DockerError: If running the container fails.
         """
         try:
-            self.app.log.info(f"Running container {container_name} with image {image}")
+            self.app.log.info(f"Running container {container_name} with image {image} on command {command}")
 
             # Run the container
             container = self.client.containers.run(
@@ -176,7 +177,8 @@ class DockerHandler(HandlersInterface, Handler):
                 environment=environment,
                 volumes=volumes,
                 tty=tty,
-                stdin_open=stdin_open
+                stdin_open=stdin_open,
+                remove=remove
             )
 
             self.app.log.info(f"Successfully started container {container_name} with ID {container.id}")

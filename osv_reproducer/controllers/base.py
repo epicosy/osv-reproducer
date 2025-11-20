@@ -1,3 +1,5 @@
+import argparse
+
 from pathlib import Path
 from cement import Controller, ex
 from datetime import timedelta, datetime
@@ -290,6 +292,44 @@ class Base(Controller):
             self.app.pargs.osv_id, mode=ReproductionMode.FIX, build_extra_args=self.app.pargs.build_extra_args,
             output_dir=self.app.pargs.output_dir
         )
+
+    @ex(
+        help='Generates testcases for a given OSV vulnerability (requires seed corpus dir with seed subdir).',
+        arguments=[
+            # catch-all: everything after `--` goes here
+            (['extras'], {'help': 'Extra args for fuzzer (use after --)', 'nargs': argparse.REMAINDER}),
+            (['-r', '--runs'], {'help': 'Number of individual tests to run', 'type': int, 'default': 100}),
+            (['-d', '--corpus_dir'], {'help': 'Path to seed corpus dir', 'type': str, "required": True}),
+        ]
+    )
+    def generate(self):
+        try:
+            extra_args = getattr(self.app.pargs, 'extras', []) or []
+
+            if extra_args and extra_args[0] == '--':
+                extra_args = extra_args[1:]
+
+            if '-runs' not in extra_args:
+                extra_args.insert(0, f"-runs={self.app.pargs.runs}")
+
+            context = self._get_context(self.app.pargs.osv_id, mode=ReproductionMode.CRASH)
+            paths_layout = self._get_paths_layout(self.app.pargs.output_dir, context.project_info.name)
+
+            exit_code = self.runner_handler.run_fuzzer(
+                context.run_fuzzer_container_name, context.issue_report, out_dir=paths_layout.out,
+                val_dir=Path(self.app.pargs.corpus_dir), extra_args=extra_args
+            )
+
+            exit(exit_code)
+
+        except OSVReproducerError as e:
+            self.app.log.error(f"Error: {str(e)}")
+        except Exception as e:
+            self.app.log.error(f"Unexpected error: {str(e)}")
+            if getattr(self.app.pargs, "verbose", False):
+                import traceback
+                self.app.log.error(traceback.format_exc())
+        exit(1)
 
     @ex(help='Checkout (at crash commit) the project for a given OSV vulnerability (useful for downstream tasks).')
     def checkout(self):

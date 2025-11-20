@@ -1,4 +1,5 @@
 import json
+from os import remove
 
 from pathlib import Path
 from typing import Optional
@@ -43,8 +44,11 @@ class RunnerHandler(DockerHandler):
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
             out_dir.mkdir(exist_ok=True)
             crash_info_file = out_dir / "crash_info.json"
+            fuzzer_path = out_dir / issue_report.fuzz_target
 
-            # TODO: check if the issue_report.fuzz_target exists under the out_dir
+            if not fuzzer_path.exists():
+                self.app.log.error(f"Fuzzer does not exist at {fuzzer_path}")
+                return None
 
             if crash_info_file.exists():
                 with crash_info_file.open(mode="r") as f:
@@ -102,6 +106,82 @@ class RunnerHandler(DockerHandler):
                 return CrashInfo(**crash_info_dict)
 
             return None
+        except Exception as e:
+            self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
+            raise DockerError(f"Failed to run container {container_name}: {str(e)}")
+
+    def run_fuzzer(
+            self, container_name, issue_report: OSSFuzzIssueReport, out_dir: Path, val_dir: Path, extra_args: list
+    ):
+        try:
+            platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
+            seed_corpus_path = val_dir / "seed"
+            fuzzer_path = out_dir / issue_report.fuzz_target
+
+            if not out_dir.exists():
+                self.app.log.error(f"Directory {out_dir} does not exist")
+                return None
+
+            if not seed_corpus_path.exists():
+                self.app.log.error(f"Seed corpus does not exist at {seed_corpus_path}")
+                return None
+
+            if len([path for path in seed_corpus_path.rglob("*") if path.is_file()]) == 0:
+                self.app.log.error(f"Seed corpus is empty at {seed_corpus_path}")
+                return None
+
+            if not fuzzer_path.exists():
+                self.app.log.error(f"Fuzzer does not exist at {fuzzer_path}")
+                return None
+
+            container = self.check_container_exists(container_name)
+
+            if container:
+                # Delete it if already exists
+                self.app.log.info(f"Removing existing container {container_name}")
+                container.remove(force=True)
+
+            # Environment variables for the container
+            environment = {
+                'HELPER': 'True',
+                'ARCHITECTURE': issue_report.architecture,
+                'RUN_FUZZER_MODE': 'interactive',  # to store the output from the fuzzer
+                'SANITIZER': issue_report.sanitizer.split(" ")[0],
+                'CORPUS_DIR': '/corpus',
+                'FUZZING_ENGINE': 'libfuzzer'
+            }
+
+            # Volumes to mount
+            volumes = {
+                str(out_dir): {'bind': '/out', 'mode': 'rw'},
+                str(val_dir): {'bind': '/corpus', 'mode': 'rw'},
+            }
+
+            self.app.log.info(f"Running container {container_name} to generate new test cases")
+            base_command = ['run_fuzzer', issue_report.fuzz_target]
+            full_command = base_command + extra_args
+
+            # Run the container
+            # TODO: image should be provided through the configs
+            container = self.run_container(
+                image='gcr.io/oss-fuzz-base/base-runner:latest',
+                container_name=container_name,
+                command=full_command,
+                platform=platform,
+                environment=environment,
+                volumes=volumes,
+                tty=False,
+                stdin_open=True,
+                remove=True
+            )
+
+            # Stream and display logs in real-time
+            _ = self.stream_container_logs(container)
+
+            # Check container exit code
+            exit_code = self.check_container_exit_code(container)
+
+            return exit_code
         except Exception as e:
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")

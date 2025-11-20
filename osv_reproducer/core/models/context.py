@@ -22,3 +22,7 @@ class ReproductionContext:
     @property
     def runner_container_name(self):
         return f"{self.issue_report.project}_{self.issue_report.id}_{self.mode}"
+
+    @property
+    def run_fuzzer_container_name(self):
+        return f"{self.issue_report.project}_{self.issue_report.id}_{self.mode}_run"
