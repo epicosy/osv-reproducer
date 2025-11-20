@@ -159,7 +159,7 @@ class GCSHandler(HandlersInterface, Handler):
         snapshot_file_path = self.app.snapshots_dir / project / f"{timestamp}.json"
 
         if snapshot_file_path.exists():
-            self.app.log.info(f"Using cached snapshots for {self.app.pargs.osv_id}")
+            self.app.log.info(f"Using cached snapshot from {snapshot_file_path}")
             with snapshot_file_path.open(mode="r") as f:
                 return json.load(f)
         return None
