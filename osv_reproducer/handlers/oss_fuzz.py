@@ -166,7 +166,7 @@ class OSSFuzzHandler(HandlersInterface, Handler):
 
                 return issue_report
         else:
-            self.app.log.info(f"Using cached issue report for {self.app.pargs.osv_id}")
+            self.app.log.info(f"Using cached issue report for {osv_record.id}")
             with issue_report_path.open(mode="r") as f:
                 oss_fuzz_issue_report_dict = json.load(f)
                 return OSSFuzzIssueReport(**oss_fuzz_issue_report_dict)

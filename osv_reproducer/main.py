@@ -3,7 +3,6 @@ from pathlib import Path
 from gitlib.common.exceptions import GitLibException
 
 from cement import App
-from cement.core.exc import CaughtSignal
 
 from .core.exc import OSVReproducerError
 from .controllers.base import Base
