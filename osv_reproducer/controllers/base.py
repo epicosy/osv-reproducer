@@ -1,6 +1,7 @@
 import argparse
 
 from pathlib import Path
+from typing import Optional
 from cement import Controller, ex
 from datetime import timedelta, datetime
 from cement.utils.version import get_version_banner
@@ -8,7 +9,7 @@ from cement.utils.version import get_version_banner
 from ..core.version import get_version
 from ..core.exc import OSVReproducerError
 from ..core.common.enums import ReproductionMode
-from ..core.models import ReproductionContext, PathsLayout
+from ..core.models import ReproductionContext, PathsLayout, CrashInfo
 from ..utils.parse.arguments import parse_key_value_string
 
 
@@ -203,7 +204,7 @@ class Base(Controller):
 
         return fuzzer_container
 
-    def _run_reproduction(self, context, paths_layout):
+    def _run_reproduction(self, context: ReproductionContext, paths_layout: PathsLayout) -> Optional[CrashInfo]:
         """
         Run the reproduction of a crash using the runner handler.
 
@@ -218,7 +219,9 @@ class Base(Controller):
             context.runner_container_name, context.test_case_path, context.issue_report, out_dir=paths_layout.out
         )
 
-    def _handle_crash_check(self, context, paths_layout, crash_info):
+    def _handle_crash_check(
+            self, osv_id: str, context: ReproductionContext, paths_layout: PathsLayout, crash_info: CrashInfo
+    ) -> int:
         """
         Handle the crash check result based on the reproduction mode.
 
@@ -235,28 +238,27 @@ class Base(Controller):
                 verification = self.runner_handler.verify_crash(context.issue_report, crash_info)
 
                 if verification and verification.success:
-                    self.app.log.info(f"Successfully reproduced vulnerability {self.app.pargs.osv_id}")
+                    self.app.log.info(f"Successfully reproduced vulnerability {osv_id}")
                     self.app.log.info(f"Results saved to {paths_layout.base_path}")
                     return 0
                 else:
                     self.app.log.error(
-                        f"{self.app.pargs.osv_id} reproduction did not yield expected values:\n{verification.error_messages}"
+                        f"{osv_id} reproduction did not yield expected values:\n{verification.error_messages}"
                     )
             else:
-                self.app.log.error(f"Could not reproduce {self.app.pargs.osv_id} vulnerability")
+                self.app.log.error(f"Could not reproduce {osv_id} vulnerability")
         elif context.mode == ReproductionMode.FIX:
             if crash_info:
-                self.app.log.error(
-                    f"{self.app.pargs.osv_id} patch did not address the crash:\n{crash_info}"
-                )
+                self.app.log.error(f"{osv_id} patch did not address the crash:\n{crash_info}")
             else:
-                self.app.log.info(f"Patch addressed the crash for {self.app.pargs.osv_id} vulnerability")
-                # self.app.log.info(f"Results saved to {paths_layout.base_path}")
+                self.app.log.info(f"Patch addressed the crash for {osv_id} vulnerability")
                 return 0
 
         return 1
 
-    def _run_and_handle(self, osv_id: str, mode: ReproductionMode, build_extra_args: str, output_dir: str):
+    def _run_and_handle(
+            self, osv_id: str, mode: ReproductionMode, build_extra_args: str, output_dir: str
+    ):
         action_desc = "reproduction of crash" if mode.CRASH else "verification of patch"
         try:
             extra_args = parse_key_value_string(build_extra_args)
@@ -267,7 +269,7 @@ class Base(Controller):
 
             self._setup_fuzzer_container(context, paths_layout, extra_args)
             crash_info = self._run_reproduction(context, paths_layout)
-            exit_code = self._handle_crash_check(context, paths_layout, crash_info)
+            exit_code = self._handle_crash_check(osv_id, context, paths_layout, crash_info)
             exit(exit_code)
 
         except OSVReproducerError as e:
