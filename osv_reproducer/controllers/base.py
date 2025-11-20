@@ -9,7 +9,7 @@ from cement.utils.version import get_version_banner
 from ..core.version import get_version
 from ..core.exc import OSVReproducerError
 from ..core.common.enums import ReproductionMode
-from ..core.models import ReproductionContext, PathsLayout, CrashInfo
+from ..core.models import ReproductionContext, PathsLayout, CrashInfo, RunStatus, VerificationResult
 from ..utils.parse.arguments import parse_key_value_string
 
 
@@ -219,9 +219,9 @@ class Base(Controller):
             context.runner_container_name, context.test_case_path, context.issue_report, out_dir=paths_layout.out
         )
 
-    def _handle_crash_check(
+    def _check_crash_info(
             self, osv_id: str, context: ReproductionContext, paths_layout: PathsLayout, crash_info: CrashInfo
-    ) -> int:
+    ) -> VerificationResult:
         """
         Handle the crash check result based on the reproduction mode.
 
@@ -233,33 +233,36 @@ class Base(Controller):
         Returns:
             int: Exit code (0 for success, 1 for failure)
         """
-        if context.mode == ReproductionMode.CRASH:
+        if context.mode == ReproductionMode.FIX:
+            verification = VerificationResult(success=crash_info is None)
+
+            if verification.success:
+                self.app.log.info(f"Patch addressed the crash for {osv_id} vulnerability")
+            else:
+                self.app.log.error(f"{osv_id} patch did not address the crash:\n{crash_info}")
+        else:
             if crash_info:
                 verification = self.runner_handler.verify_crash(context.issue_report, crash_info)
 
-                if verification and verification.success:
+                if verification.success:
                     self.app.log.info(f"Successfully reproduced vulnerability {osv_id}")
                     self.app.log.info(f"Results saved to {paths_layout.base_path}")
-                    return 0
                 else:
                     self.app.log.error(
                         f"{osv_id} reproduction did not yield expected values:\n{verification.error_messages}"
                     )
             else:
+                verification = VerificationResult(success=False)
                 self.app.log.error(f"Could not reproduce {osv_id} vulnerability")
-        elif context.mode == ReproductionMode.FIX:
-            if crash_info:
-                self.app.log.error(f"{osv_id} patch did not address the crash:\n{crash_info}")
-            else:
-                self.app.log.info(f"Patch addressed the crash for {osv_id} vulnerability")
-                return 0
 
-        return 1
+        return verification
 
     def _run_and_handle(
             self, osv_id: str, mode: ReproductionMode, build_extra_args: str, output_dir: str
-    ):
+    ) -> RunStatus:
         action_desc = "reproduction of crash" if mode.CRASH else "verification of patch"
+        run_status = RunStatus()
+
         try:
             extra_args = parse_key_value_string(build_extra_args)
             self.app.log.info(f"Starting {action_desc} for {osv_id}")
@@ -268,32 +271,50 @@ class Base(Controller):
             paths_layout = self._get_paths_layout(output_dir, context.project_info.name)
 
             self._setup_fuzzer_container(context, paths_layout, extra_args)
+            run_status.setup_ok = True
             crash_info = self._run_reproduction(context, paths_layout)
-            exit_code = self._handle_crash_check(osv_id, context, paths_layout, crash_info)
-            exit(exit_code)
+            fuzzer_container = self.runner_handler.check_container_exists(context.runner_container_name)
+
+            run_status.fuzzing_ok = self.runner_handler.container_ran(
+                fuzzer_container, expected_exit_code=0 if mode == ReproductionMode.FIX else 1,
+                require_logs=True, require_no_error=True,
+            )
+            verification = self._check_crash_info(osv_id, context, paths_layout, crash_info)
+            run_status.verification_ok = verification.success
+            run_status.exit_code = self.runner_handler.check_container_exit_code(fuzzer_container)
 
         except OSVReproducerError as e:
             self.app.log.error(f"Error: {str(e)}")
+            run_status.exit_code = 2
         except Exception as e:
             self.app.log.error(f"Unexpected error: {str(e)}")
             if getattr(self.app.pargs, "verbose", False):
                 import traceback
                 self.app.log.error(traceback.format_exc())
-        exit(1)
+            run_status.exit_code = 70
+
+        print(run_status)
+        return run_status
 
     @ex(help='Reproduce a given OSS-Fuzz vulnerability in the OSV database.')
     def reproduce(self):
-        self._run_and_handle(
+        run_status = self._run_and_handle(
             self.app.pargs.osv_id, mode=ReproductionMode.CRASH, build_extra_args=self.app.pargs.build_extra_args,
             output_dir=self.app.pargs.output_dir
         )
+        # TODO: maybe should add a flag
+        if run_status.exit_code is not None:
+            exit(run_status.exit_code)
 
     @ex(help='Verify if the patched version addresses the issue for a given OSS-Fuzz Issue in the OSV database.')
     def verify(self):
-        self._run_and_handle(
+        run_status = self._run_and_handle(
             self.app.pargs.osv_id, mode=ReproductionMode.FIX, build_extra_args=self.app.pargs.build_extra_args,
             output_dir=self.app.pargs.output_dir
         )
+        # TODO: maybe should add a flag
+        if run_status.exit_code is not None:
+            exit(run_status.exit_code)
 
     @ex(
         help='Generates testcases for a given OSV vulnerability (requires seed corpus dir with seed subdir).',

@@ -6,7 +6,7 @@ import docker
 from ast import literal_eval
 from pathlib import Path
 from cement import Handler
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, List
 from docker.errors import DockerException, APIError
 from docker.models.containers import Container
 
@@ -208,7 +208,7 @@ class DockerHandler(HandlersInterface, Handler):
 
         return logs
 
-    def check_container_exit_code(self, container: Container) -> int:
+    def check_container_exit_code(self, container: Container) -> Optional[int]:
         """
         Check the exit code of a container.
 
@@ -218,6 +218,9 @@ class DockerHandler(HandlersInterface, Handler):
         Returns:
             int: Exit code of the container.
         """
+        if not container:
+            return None
+
         container.reload()  # Refresh container data
         exit_code = container.attrs['State']['ExitCode']
 
@@ -227,3 +230,47 @@ class DockerHandler(HandlersInterface, Handler):
             self.app.log.info(f"Container {container.name} completed successfully")
 
         return exit_code
+
+    def container_ran(
+            self, container: Container, expected_exit_code: Optional[int] = None, require_logs: bool = False,
+            require_no_error: bool = False
+    ) -> bool:
+        if not container:
+            return False
+
+        state = container.attrs.get("State", {})
+
+        # --- 1. Did it ever start? ---
+        started_at = state.get("StartedAt", "")
+        if not started_at or started_at.startswith("0001"):
+            self.app.log.warning(f"Container {container.name} never started")
+            return False
+
+        # --- 2. Check status ---
+        status = state.get("Status", "")
+        if status in ("created", ""):
+            self.app.log.warning(f"Container {container.name} was created but never started")
+            return False
+
+        # --- 3. Check logs (optional) ---
+        if require_logs:
+            logs = container.logs(stdout=True, stderr=True).strip()
+
+            if not logs:
+                self.app.log.warning(f"Container {container.name} did not produce any logs")
+                return False
+
+        # --- 4. Check error (optional) ---
+        error = state.get("Error") or state.get("OOMKilled") or None
+        # Docker may report "Error" directly in State, no need for wait()
+        if require_no_error and error:
+            self.app.log.warning(f"Container {container.name} encountered an error: {error}")
+            return False
+
+        # --- 5. Check exit code (optional) ---
+        exit_code = state.get("ExitCode")
+        if expected_exit_code is not None:
+            return exit_code == expected_exit_code
+
+        # If we get here, the container ran at least once
+        return True

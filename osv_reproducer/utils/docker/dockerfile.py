@@ -4,7 +4,6 @@ Utility functions for working with Dockerfiles and extracting artifacts.
 import os
 import requests
 from pathlib import Path
-from urllib.parse import urlparse
 from typing import Dict, List, Tuple, Optional
 from logging import Logger
 

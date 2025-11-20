@@ -8,7 +8,7 @@ homepage = "https://github.com/epicosy/osv-reproducer"
 
 [project]
 name = "osv-reproducer"
-version = "0.0.4"
+version = "0.0.5"
 description = "A reproducer component that can compile OSS-Fuzz projects at specific versions and run test cases"
 readme = "README.md"
 authors = [

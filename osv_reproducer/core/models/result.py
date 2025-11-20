@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from sarif_pydantic.sarif import Stack
@@ -18,3 +17,10 @@ class VerificationResult(BaseModel):
     crash_signature: Optional[str] = None
     stack_trace: Optional[str] = None
     error_messages: List[str] = Field(default_factory=list)
+
+
+class RunStatus(BaseModel):
+    setup_ok: bool = False
+    fuzzing_ok: bool = False
+    verification_ok: bool = False
+    exit_code: Optional[int] = None
