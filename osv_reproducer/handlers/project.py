@@ -117,7 +117,7 @@ class ProjectHandler(GithubHandler):
 
                 if local_repo_sha and v["rev"] == local_repo_sha:
                     self.app.log.info(
-                        f"Using cached repository at {local_repo_sha} for {self.app.pargs.osv_id} in {target_dir}")
+                        f"Using cached repository at {local_repo_sha} in {target_dir}")
                     continue
 
                 self.clone_repository(

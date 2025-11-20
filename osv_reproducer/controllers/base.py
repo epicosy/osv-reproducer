@@ -293,7 +293,6 @@ class Base(Controller):
                 self.app.log.error(traceback.format_exc())
             run_status.exit_code = 70
 
-        print(run_status)
         return run_status
 
     @ex(help='Reproduce a given OSS-Fuzz vulnerability in the OSV database.')
