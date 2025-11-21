@@ -1,10 +1,28 @@
+import re
+
 from pathlib import Path
+from typing import List, Optional
 from docker.models.containers import Container
 
 from ..handlers.docker import DockerHandler
 from ..core.exc import BuildError, DockerError
 from ..core.models import ProjectInfo, OSSFuzzIssueReport
 from ..utils.docker.dockerfile import extract_artifacts_from_dockerfile
+
+MAKE_ERROR_PATTERN = re.compile(
+    r'^make:\s+\*\*\*\s+\[(?P<file>[^:\]]+):(?P<line>\d+):\s*(?P<target>[^\]]+)\]\s+Error\s+(?P<code>\d+)\s*$'
+)
+
+
+def find_make_error(lines: List[str]) -> Optional[int]:
+    for line in lines:
+        match = re.match(MAKE_ERROR_PATTERN, line)
+
+        if match:
+            match_dict = match.groupdict()
+            return match_dict['code']
+
+    return None
 
 
 class BuildHandler(DockerHandler):
@@ -98,7 +116,17 @@ class BuildHandler(DockerHandler):
             if container:
                 # Check if the container can be reused
                 if self.check_container_exit_status(container):
-                    return container
+                    logs = container.logs(tail=10).decode("utf-8").strip().split("\n")
+
+                    # if there is an error in the build process, we should find it at the end of the logs
+                    error_code = find_make_error(logs)
+
+                    if not error_code:
+                        return container
+                    self.app.log.warning(f"Previous build failed with error code {error_code}")
+
+                self.app.log.warning(f"Removing existing container {container_name} to run a new build")
+                container.remove(force=True)
 
             sanitizer = issue_report.sanitizer.split(" ")[0]
             platform = 'linux/arm64' if issue_report.architecture == 'aarch64' else 'linux/amd64'
@@ -151,7 +179,14 @@ class BuildHandler(DockerHandler):
             )
 
             # Stream and display logs in real-time
-            self.stream_container_logs(container)
+            logs = self.stream_container_logs(container)
+
+            # if there is an error in the build process, we should find it at the end of the logs
+            error_code = find_make_error(logs[-10:])
+
+            if error_code:
+                self.app.log.error(f"Build failed with error code {error_code}")
+                raise DockerError(f"Build failed with error code {error_code}")
 
             # Check container exit code
             self.check_container_exit_code(container)
