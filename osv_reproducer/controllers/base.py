@@ -264,6 +264,7 @@ class Base(Controller):
         run_status = RunStatus()
 
         try:
+            context_path = Path(output_dir) / "context.json"
             extra_args = parse_key_value_string(build_extra_args)
             self.app.log.info(f"Starting {action_desc} for {osv_id}")
 
@@ -282,6 +283,10 @@ class Base(Controller):
             verification = self._check_crash_info(osv_id, context, paths_layout, crash_info)
             run_status.verification_ok = verification.success
             run_status.exit_code = self.runner_handler.check_container_exit_code(fuzzer_container)
+
+            with context_path.open(mode="w") as f:
+                json_str = context.model_dump_json(indent=2, exclude_unset=True, exclude_none=True)
+                f.write(json_str)
 
         except OSVReproducerError as e:
             self.app.log.error(f"Error: {str(e)}")

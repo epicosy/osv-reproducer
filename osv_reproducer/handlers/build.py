@@ -6,7 +6,7 @@ from docker.models.containers import Container
 
 from ..handlers.docker import DockerHandler
 from ..core.exc import BuildError, DockerError
-from ..core.models import ProjectInfo, OSSFuzzIssueReport
+from ..core.models import OSSFuzzIssueReport
 from ..utils.docker.dockerfile import extract_artifacts_from_dockerfile
 
 MAKE_ERROR_PATTERN = re.compile(
@@ -185,7 +185,6 @@ class BuildHandler(DockerHandler):
             error_code = find_make_error(logs[-10:])
 
             if error_code:
-                self.app.log.error(f"Build failed with error code {error_code}")
                 raise DockerError(f"Build failed with error code {error_code}")
 
             # Check container exit code
@@ -193,5 +192,4 @@ class BuildHandler(DockerHandler):
 
             return container
         except Exception as e:
-            self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")

@@ -1,13 +1,13 @@
 from pathlib import Path
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 from .project import ProjectInfo
 from .report import OSSFuzzIssueReport
 from ..common.enums import ReproductionMode
 
 
-@dataclass
-class ReproductionContext:
+
+class ReproductionContext(BaseModel):
     mode: ReproductionMode
     issue_report: OSSFuzzIssueReport
     project_info: ProjectInfo

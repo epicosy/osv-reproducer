@@ -25,4 +25,4 @@ class ProjectInfo(BaseModel):
     view_restrictions: Optional[str] = Field(default=None)
     run_tests: Optional[bool] = Field(default=None)
     labels: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
-    help_url: Optional[AnyUrl] = Field(default_factory=str)
+    help_url: Optional[AnyUrl] = None
