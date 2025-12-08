@@ -3,6 +3,13 @@ class OSVReproducerError(Exception):
     """Generic errors."""
     pass
 
+class ContextError(Exception):
+    """Generic errors."""
+    pass
+
+class BuilderError(Exception):
+    """Generic errors."""
+    pass
 
 class OSVError(Exception):
     """Generic errors."""
@@ -10,11 +17,6 @@ class OSVError(Exception):
 
 
 class GitHubError(Exception):
-    """Generic errors."""
-    pass
-
-
-class BuildError(Exception):
     """Generic errors."""
     pass
 

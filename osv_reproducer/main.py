@@ -1,20 +1,16 @@
-from pathlib import Path
-
-from gitlib.common.exceptions import GitLibException
-
 from cement import App
 
-from .core.exc import OSVReproducerError
 from .controllers.base import Base
-from .core.interfaces import HandlersInterface
+from .core.exc import OSVReproducerError
+
+from .handlers import HandlersInterface
 
 from .handlers.gcs import GCSHandler
 from .handlers.osv import OSVHandler
-from .handlers.build import BuildHandler
-from .handlers.runner import RunnerHandler
+from .handlers.docker import DockerHandler
 from .handlers.github import GithubHandler
-from .handlers.project import ProjectHandler
 from .handlers.oss_fuzz import OSSFuzzHandler
+from .handlers.file_provision import FileProvisionHandler
 
 
 class OSVReproducer(App):
@@ -47,52 +43,12 @@ class OSVReproducer(App):
 
         # register handlers
         handlers = [
-            Base, GithubHandler, ProjectHandler, OSVHandler, GCSHandler, BuildHandler, OSSFuzzHandler,
-            RunnerHandler
+            Base, GithubHandler, OSVHandler, DockerHandler, GCSHandler, OSSFuzzHandler, FileProvisionHandler
         ]
 
         interfaces = [
             HandlersInterface
         ]
-
-    @property
-    def app_dir(self):
-        path = Path.home() / ".osv_reproducer"
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def records_dir(self):
-        path = Path.home() / ".osv_reproducer" / "records"
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def projects_dir(self):
-        """
-            Return the path to the projects folder.
-        """
-        path = Path.home() / ".osv_reproducer" / "projects"
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def issues_dir(self):
-        path = Path.home() / ".osv_reproducer" / "issues"
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def testcases_dir(self):
-        path = Path.home() / ".osv_reproducer" / "testcases"
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def snapshots_dir(self):
-        path = Path.home() / ".osv_reproducer" / "snapshots"
-        path.mkdir(exist_ok=True, parents=True)
-        return path
 
 
 def main():
@@ -112,13 +68,6 @@ def main():
             print('OSVReproducerError > %s' % e.args[0])
             app.exit_code = 1
 
-            if app.debug is True:
-                import traceback
-                traceback.print_exc()
-
-        except GitLibException as e:
-            print('GitLibError > %s' % e.args[0])
-            app.exit_code = 1
             if app.debug is True:
                 import traceback
                 traceback.print_exc()

@@ -1,11 +1,11 @@
-from typing import Optional
+from typing import Optional, Tuple
 from pydantic import BaseModel, AnyHttpUrl
 
 from .result import CrashInfo
 
 
 class OSSFuzzIssueReport(BaseModel):
-    id: str
+    id: int
     project: str
     fuzzing_engine: str
     fuzz_target: str
@@ -16,6 +16,14 @@ class OSSFuzzIssueReport(BaseModel):
     testcase_url: AnyHttpUrl
     regressed_url: AnyHttpUrl
     crash_info: CrashInfo
+
+    @property
+    def testcase_id(self) -> int:
+        for param, value in self.testcase_url.query_params():
+            if param == "testcase_id":
+                return int(value)
+
+        raise ValueError(f"No testcase_id found in {self.testcase_url}")
 
     @property
     def architecture(self) -> str:
@@ -29,11 +37,18 @@ class OSSFuzzIssueReport(BaseModel):
         return "x86_64"
 
     @property
-    def range(self) -> list:
-        for param, value in self.regressed_url.query_params():
-            if param == "range":
-                return value.split(":")
-            if param == "revision":
-                return value.split(":")
+    def range(self) -> Tuple[Optional[str], Optional[str]]:
+        parts = []
 
-        return []
+        for param, value in self.regressed_url.query_params():
+            if param in ["range", "revision"]:
+                parts = value.split(":")
+                break
+
+        if len(parts) == 1:
+            return parts[0], parts[0]
+
+        if len(parts) == 2:
+            return parts[0], parts[1]
+
+        return None, None

@@ -1,4 +1,4 @@
-from pathlib import Path
+from typing import Dict
 from pydantic import BaseModel
 
 from .project import ProjectInfo
@@ -6,14 +6,14 @@ from .report import OSSFuzzIssueReport
 from ..common.enums import ReproductionMode
 
 
-
 class ReproductionContext(BaseModel):
+    id: str
     mode: ReproductionMode
     issue_report: OSSFuzzIssueReport
     project_info: ProjectInfo
-    snapshot: dict
+    mount_files: Dict[str, str]
+    repositories: dict
     timestamp: str
-    test_case_path: Path
 
     @property
     def fuzzer_container_name(self):
@@ -22,7 +22,3 @@ class ReproductionContext(BaseModel):
     @property
     def runner_container_name(self):
         return f"{self.issue_report.project}_{self.issue_report.id}_{self.mode}"
-
-    @property
-    def run_fuzzer_container_name(self):
-        return f"{self.issue_report.project}_{self.issue_report.id}_{self.mode}_run"

@@ -7,6 +7,20 @@ MEMORY_ACCESS_PATTERN = r'(\w+) of size (\d+) at (0x[0-9a-fA-F]+) thread (T\d+)'
 SIGNAL_PATTERN = r'The signal is caused by a (\w+) memory access\.'
 DESCRIPTION_PATTERN = r'(\w[\w\-]+) on address (0x[0-9a-fA-F]+) at pc (0x[0-9a-fA-F]+) bp (0x[0-9a-fA-F]+) sp (0x[0-9a-fA-F]+)'
 SEGV_PATTERN = r'SEGV on unknown address (0x[0-9a-fA-F]+)'
+MAKE_ERROR_PATTERN = re.compile(
+    r'^make:\s+\*\*\*\s+\[(?P<file>[^:\]]+):(?P<line>\d+):\s*(?P<target>[^\]]+)\]\s+Error\s+(?P<code>\d+)\s*$'
+)
+
+
+def find_make_error(lines: List[str]) -> Optional[int]:
+    for line in lines:
+        match = re.match(MAKE_ERROR_PATTERN, line)
+
+        if match:
+            match_dict = match.groupdict()
+            return match_dict['code']
+
+    return None
 
 
 def find_error_start(log_lines: List[str]) -> tuple:

@@ -3,18 +3,20 @@ Module for interacting with Docker.
 """
 import docker
 
-from ast import literal_eval
 from pathlib import Path
 from cement import Handler
+from ast import literal_eval
 from typing import Dict, Optional, List
-from docker.errors import DockerException, APIError
+
 from docker.models.containers import Container
+from docker.errors import DockerException, APIError
 
 from ..core.exc import DockerError
-from ..core.interfaces import HandlersInterface
+from ..handlers import HandlersInterface
+from ..core.interfaces import DockerInterface
 
 
-class DockerHandler(HandlersInterface, Handler):
+class DockerHandler(DockerInterface, HandlersInterface, Handler):
     """Handler for interacting with Docker."""
     class Meta:
         label = 'docker'
@@ -32,18 +34,18 @@ class DockerHandler(HandlersInterface, Handler):
             raise DockerError(f"Failed to initialize Docker client: {str(e)}")
 
     def build_image(
-            self, dockerfile_path: Path, tag: str, build_args: Optional[Dict[str, str]] = None,
-            context_path: Optional[Path] = None, remove_containers: bool = True,
+            self, context_path: Path, tag: str, build_args: Optional[Dict[str, str]] = None,
+            remove_containers: bool = True, **kwargs
     ) -> str:
         """
         Build a Docker image.
 
         Args:
-            dockerfile_path: Path to the Dockerfile.
+            context_path: Path to the directory containing the Dockerfile and build context files.
             tag: Tag for the image.
             build_args: Build arguments.
-            context_path: Path to the build context. If None, uses the directory containing the Dockerfile.
             remove_containers: Whether to remove intermediate containers.
+            kwargs: Additional keyword arguments to pass to docker.api.build().
 
         Returns:
             str: ID of the built image.
@@ -52,21 +54,16 @@ class DockerHandler(HandlersInterface, Handler):
             DockerError: If building the image fails.
         """
         try:
-            if not dockerfile_path.exists():
-                raise DockerError(f"Dockerfile not found at {dockerfile_path}")
-
-            if context_path is None:
-                context_path = dockerfile_path.parent.expanduser()
-
-            self.app.log.info(f"Building Docker image {tag} from {dockerfile_path}")
+            self.app.log.info(f"Building Docker image {tag}")
 
             # Build the image
             logs = self.client.api.build(
                 path=str(context_path),
-                dockerfile=dockerfile_path.name,
+                dockerfile="Dockerfile",
                 tag=tag,
                 buildargs=build_args,
-                rm=remove_containers
+                rm=remove_containers,
+                **kwargs
             )
 
             # Log build output
@@ -86,16 +83,15 @@ class DockerHandler(HandlersInterface, Handler):
             self.app.log.error(f"Failed to build Docker image {tag}: {str(e)}")
             raise DockerError(f"Failed to build Docker image {tag}: {str(e)}")
 
+    def check_image_exists(self, image_name: str) -> Optional[str]:
+        if self.client.images.list(name=image_name):
+            self.app.log.info(f"Image {image_name} already exists")
+
+            return image_name
+
+        return None
+
     def check_container_exists(self, container_name: str) -> Optional[Container]:
-        """
-        Check if a container with the given name already exists.
-
-        Args:
-            container_name: Name of the container to check.
-
-        Returns:
-            Container object if found, None otherwise.
-        """
         existing_containers = self.client.containers.list(all=True, filters={"name": container_name})
 
         for container in existing_containers:
@@ -108,16 +104,6 @@ class DockerHandler(HandlersInterface, Handler):
         return None
 
     def check_container_exit_status(self, container: Container, exit_code: int = 0) -> bool:
-        """
-        Check the status of a container and determine if it needs to be recreated.
-
-        Args:
-            container: Container object to check.
-            exit_code: Expected exit code of the container.
-
-        Returns:
-            bool: True if the container can be reused, False if it should be recreated.
-        """
         container.reload()  # Refresh container data
 
         if container.attrs['State']['Status'] == 'exited':
@@ -139,29 +125,6 @@ class DockerHandler(HandlersInterface, Handler):
             platform: str = 'linux/amd64', privileged: bool = True, shm_size: str = '2g', detach: bool = True,
             tty: bool = False, stdin_open: bool = True, remove: bool = False,
     ) -> Container:
-        """
-        Run a Docker container with the given parameters.
-
-        Args:
-            image: Docker image to use.
-            container_name: Name for the container.
-            command: Command to run in the container.
-            environment: Environment variables for the container.
-            volumes: Volumes to mount in the container.
-            platform: Platform for the container (e.g., 'linux/amd64', 'linux/arm64').
-            privileged: Whether to run the container in privileged mode.
-            shm_size: Size of /dev/shm in the container.
-            detach: Whether to run the container in detached mode.
-            tty: Whether to allocate a pseudo-TTY.
-            stdin_open: Whether to keep STDIN open.
-            remove: Whether to remove the container when it exits.
-
-        Returns:
-            Container object.
-
-        Raises:
-            DockerError: If running the container fails.
-        """
         try:
             self.app.log.info(f"Running container {container_name} with image {image} on command {command}")
 
@@ -181,6 +144,9 @@ class DockerHandler(HandlersInterface, Handler):
                 remove=remove
             )
 
+            if not container:
+                raise ValueError(f"Container {container_name} failed")
+
             self.app.log.info(f"Successfully started container {container_name} with ID {container.id}")
 
             return container
@@ -189,12 +155,6 @@ class DockerHandler(HandlersInterface, Handler):
             raise DockerError(f"Failed to run container {container_name}: {str(e)}")
 
     def stream_container_logs(self, container: Container) -> List[str]:
-        """
-        Stream and display logs from a container.
-
-        Args:
-            container: Container object to stream logs from.
-        """
         self.app.log.info(f"Streaming logs for container {container.name}:")
 
         logs = []
@@ -209,15 +169,6 @@ class DockerHandler(HandlersInterface, Handler):
         return logs
 
     def check_container_exit_code(self, container: Container) -> Optional[int]:
-        """
-        Check the exit code of a container.
-
-        Args:
-            container: Container object to check.
-
-        Returns:
-            int: Exit code of the container.
-        """
         if not container:
             return None
 

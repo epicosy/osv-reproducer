@@ -2,7 +2,7 @@
 # TODO: User-Agent should be dynamic
 
 USER_AGENT_HEADERS = {
-    'User-Agent': f'osv-reproducer/0.0.1 Python/3.10'
+    'User-Agent': f'osv-reproducer/1.0.0 Python/3.10'
 }
 
 HTTP_HEADERS = {

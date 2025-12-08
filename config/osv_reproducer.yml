@@ -23,8 +23,10 @@ osv_reproducer:
 handlers:
   github:
     token: "<YOUR_TOKEN_HERE>"
-  project:
-    oss_fuzz_repo_sha: "20a387d78148c14dd5243ea1b16164fe08b73884"
+    project_repo_mappings:
+      libressl: "https://github.com/libressl/portable"
+      openexr: "https://github.com/AcademySoftwareFoundation/openexr"
+      ndpi: "https://github.com/ntop/nDPI"
   gcs:
     bucket_name: "clusterfuzz-builds"
 

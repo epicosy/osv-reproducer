@@ -9,6 +9,7 @@ class ProjectInfo(BaseModel):
     repo_path: str
     main_repo: AnyUrl
     main_repo_id: int
+    oss_fuzz_repo_sha: str
     homepage: Optional[str] = Field(None)
     primary_contact: Optional[str] = Field(None)
     fuzzing_engines: Optional[List[str]] = Field(default_factory=list)
@@ -26,3 +27,13 @@ class ProjectInfo(BaseModel):
     run_tests: Optional[bool] = Field(default=None)
     labels: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
     help_url: Optional[AnyUrl] = None
+
+
+class ProjectRange(BaseModel):
+    owner: str
+    name: str
+    vul_sha: Optional[str] = None
+    fix_sha: Optional[str] = None
+
+    def __str__(self):
+        return f"{self.owner}/{self.name}"

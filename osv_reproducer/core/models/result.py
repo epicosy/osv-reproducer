@@ -14,13 +14,14 @@ class CrashInfo(BaseModel):
 class VerificationResult(BaseModel):
     """Result of vulnerability verification."""
     success: bool = Field(default=False)
-    crash_signature: Optional[str] = None
-    stack_trace: Optional[str] = None
+    matched_frame: Optional[str] = None
     error_messages: List[str] = Field(default_factory=list)
 
 
 class RunStatus(BaseModel):
-    setup_ok: bool = False
+    context_ok: bool = False
+    build_ok: bool = False
     fuzzing_ok: bool = False
     verification_ok: bool = False
     exit_code: Optional[int] = None
+    error: str = None

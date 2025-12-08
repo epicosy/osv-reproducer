@@ -197,6 +197,9 @@ def parse_oss_fuzz_report_to_dict(text: str) -> Dict[str, Any]:
     if 'fuzz_target_binary' in parsed and 'fuzz_target' not in parsed:
         parsed['fuzz_target'] = parsed.pop('fuzz_target_binary')
 
+    if 'sanitizer' in parsed:
+        parsed['sanitizer'] = parsed['sanitizer'].lower().split(" ")[0]
+
     # Extract crash info
     crash_info = extract_crash_info(parsed)
 
