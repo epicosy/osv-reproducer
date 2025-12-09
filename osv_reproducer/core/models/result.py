@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field
 from sarif_pydantic.sarif import Stack
 
@@ -11,17 +11,10 @@ class CrashInfo(BaseModel):
     stack: Stack
 
 
-class VerificationResult(BaseModel):
-    """Result of vulnerability verification."""
-    success: bool = Field(default=False)
-    matched_frame: Optional[str] = None
-    error_messages: List[str] = Field(default_factory=list)
-
-
 class RunStatus(BaseModel):
     context_ok: bool = False
-    build_ok: bool = False
-    fuzzing_ok: bool = False
-    verification_ok: bool = False
+    builder_ok: bool = False
+    runner_ok: bool = False
+    verifier_ok: bool = False
     exit_code: Optional[int] = None
     error: str = None

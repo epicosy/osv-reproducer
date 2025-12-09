@@ -11,17 +11,22 @@ class BuilderError(Exception):
     """Generic errors."""
     pass
 
+
+class VerifierError(Exception):
+    """Generic errors."""
+
+
+class RunnerError(Exception):
+    """Generic errors."""
+    pass
+
+
 class OSVError(Exception):
     """Generic errors."""
     pass
 
 
 class GitHubError(Exception):
-    """Generic errors."""
-    pass
-
-
-class RunnerError(Exception):
     """Generic errors."""
     pass
 

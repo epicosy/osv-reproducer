@@ -2,16 +2,13 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict
 
-#TODO: replace external dependency with internal model
-from docker.models.containers import Container
-
 
 class DockerInterface(ABC):
     @abstractmethod
     def build_image(
             self, context_path: Path, tag: str, build_args: Optional[Dict[str, str]] = None,
             remove_containers: bool = True, **kwargs
-    ) -> str:
+    ) -> Optional[str]:
         """
         An abstract method that defines the interface for building a container image. This method
         must be implemented by subclasses to provide the functionality for building a Docker or
@@ -31,7 +28,7 @@ class DockerInterface(ABC):
                 method implementation.
 
         Returns:
-            str: The identifier or tag of the built container image.
+            Optional[str]: The identifier or tag of the built container image if successful, otherwise None.
         """
         raise NotImplementedError()
 
@@ -55,7 +52,27 @@ class DockerInterface(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def check_container_exists(self, container_name: str) -> Optional[Container]:
+    def remove_container(self, container_name: str) -> bool:
+        """
+        An abstract method to remove a container by its name. This method must be
+        implemented in the child class. It is used to locate and remove the
+        specified container. The method will return a boolean indicating whether
+        the removal was successful or not. Implementers should handle the necessary
+        logic for finding and removing the container.
+
+        Parameters:
+            container_name (str): The name of the container to be removed.
+
+        Returns:
+            bool: True if the container is successfully removed, otherwise False.
+
+        Raises:
+            NotImplementedError: If the method is not implemented in the subclass.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def check_container_exists(self, container_name: str) -> Optional[str]:
         """
         Checks if a container with the specified name exists in the Docker environment and returns it if found.
 
@@ -69,22 +86,32 @@ class DockerInterface(ABC):
                 The name of the container to check for existence.
 
         Returns:
-            Optional[Container]
-                The container object if it exists, or None if no container is found.
+            Optional[str]
+                The container name if it exists, or None if no container is found.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def check_container_exit_status(self, container: Container, exit_code: int = 0) -> bool:
+    def check_container_exit_status(self, container_name: str, exit_code: int = 0) -> bool:
         """
-        Check the status of a container and determine if it needs to be recreated.
+        Check the exit status of a container against the expected value.
+
+        This abstract method is intended to verify whether the exit status of a specified
+        container matches the provided expected exit code. The method must be implemented
+        by any subclass deriving from the base class.
 
         Args:
-            container: Container object to check.
-            exit_code: Expected exit code of the container.
+            container_name (str): The identifier or name of the container whose exit status will
+                be verified.
+            exit_code (int, optional): The expected exit code to check against the container's
+                actual exit status. Defaults to 0.
+
+        Raises:
+            NotImplementedError: Raised when the method is not implemented in the subclass.
 
         Returns:
-            bool: True if the container can be reused, False if it should be recreated.
+            bool: True if the container's exit status matches the expected `exit_code`,
+            otherwise False.
         """
         raise NotImplementedError()
 
@@ -94,79 +121,125 @@ class DockerInterface(ABC):
             environment: Optional[Dict[str, str]] = None, volumes: Optional[Dict[str, Dict[str, str]]] = None,
             platform: str = 'linux/amd64', privileged: bool = True, shm_size: str = '2g', detach: bool = True,
             tty: bool = False, stdin_open: bool = True, remove: bool = False,
-    ) -> Container:
+    ) -> Optional[str]:
         """
-        Run a Docker container with the given parameters.
+        An abstract method for running containers based on a given image. This method is expected
+        to be implemented by subclasses to handle the logic of container execution with configurable
+        options such as environment variables, volume bindings, platform specification, and execution
+        flags. The method handles parameters for advanced configurations, including privilege levels
+        and memory allocation, and returns the identifier of the started container.
 
         Args:
-            image: Docker image to use.
-            container_name: Name for the container.
-            command: Command to run in the container.
-            environment: Environment variables for the container.
-            volumes: Volumes to mount in the container.
-            platform: Platform for the container (e.g., 'linux/amd64', 'linux/arm64').
-            privileged: Whether to run the container in privileged mode.
-            shm_size: Size of /dev/shm in the container.
-            detach: Whether to run the container in detached mode.
-            tty: Whether to allocate a pseudo-TTY.
-            stdin_open: Whether to keep STDIN open.
-            remove: Whether to remove the container when it exits.
+            image (str): The name of the container image to run.
+            container_name (str): The desired name for the container.
+            command (Optional[List[str]]): The command to execute within the container. Defaults to None.
+            environment (Optional[Dict[str, str]]): A dictionary of environment variables to set within
+                the container. Defaults to None.
+            volumes (Optional[Dict[str, Dict[str, str]]]): A mapping of volume bindings for the container.
+                Defaults to None.
+            platform (str): The target platform to use when running the container. Defaults to 'linux/amd64'.
+            privileged (bool): Whether to run the container in privileged mode. Defaults to True.
+            shm_size (str): The size of the shared memory to allocate, e.g., '2g'. Defaults to '2g'.
+            detach (bool): Whether to run the container in detached mode. Defaults to True.
+            tty (bool): Whether to allocate a TTY for the container. Defaults to False.
+            stdin_open (bool): Whether to keep STDIN open even if not attached. Defaults to True.
+            remove (bool): Whether to automatically remove the container when it exits. Defaults to False.
 
         Returns:
-            Container object.
+            Optional[str]: The identifier of the started container if successful, otherwise None.
 
         Raises:
-            DockerError: If running the container fails.
+            NotImplementedError: This is an abstract method and must be implemented by any subclass.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def stream_container_logs(self, container: Container) -> List[str]:
+    def stream_container_logs(self, container_name: str) -> List[str]:
         """
-        Stream and display logs from a container.
+        Abstract method to stream logs from a container.
 
-        Args:
-            container: Container object to stream logs from.
-        """
-        raise NotImplementedError()
+        This method must be implemented by subclasses to provide functionality
+        for fetching and streaming logs from a running container. The implementation
+        should return the logs as a list of strings.
 
-    @abstractmethod
-    def check_container_exit_code(self, container: Container) -> Optional[int]:
-        """
-        Check the exit code of a container.
-
-        Args:
-            container: Container object to check.
+        Parameters:
+        container_name : str
+            The identifier or name of the container whose logs are to be streamed.
 
         Returns:
-            int: Exit code of the container.
+        List[str]
+            A list of strings where each string represents a line of the container's
+            log output.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def check_container_exit_code(self, container_name: str) -> Optional[int]:
+        """
+        Represents an abstract method to check the exit code of a specific container.
+
+        This method is intended to be implemented by subclasses to provide logic
+        for retrieving the exit code of a container. It should return the exit code
+        if available or None if the information cannot be retrieved.
+
+        Parameters:
+        container_name: str
+            The name or identifier of the container whose exit code should be checked.
+
+        Returns:
+        Optional[int]
+            The exit code of the container if available, or None if the exit code
+            cannot be determined.
+
+        Raises:
+        NotImplementedError
+            If the method is not implemented in a subclass.
         """
         raise NotImplementedError()
 
     @abstractmethod
     def container_ran(
-            self, container: Container, expected_exit_code: Optional[int] = None, require_logs: bool = False,
+            self, container_name: str, expected_exit_code: Optional[int] = None, require_logs: bool = False,
             require_no_error: bool = False
     ) -> bool:
         """
-        Checks if a Docker container ran successfully based on various criteria.
+        Checks if a container ran successfully based on provided requirements.
 
-        This method inspects the state of a given Docker container and checks whether
-        it ran successfully according to the specified parameters. It can verify if
-        the container started, its state, logs output, errors, and exit code. The method
-        returns a boolean indicating whether the container met the criteria.
+        This abstract method is intended to verify the execution of a container by
+        checking its name, expected exit code, whether logs are required, and whether
+        errors should be absent.
 
         Parameters:
-            container (Container): The Docker container to be inspected.
-            expected_exit_code (Optional[int]): The exit code to verify against the
-                container's exit state. Defaults to None, implying no exit code check.
-            require_logs (bool): Whether to require the container to have produced logs.
-                Defaults to False.
-            require_no_error (bool): Whether to ensure the container did not encounter
-                any errors. Defaults to False.
+        container_name (str): The name of the container to verify.
+        expected_exit_code (Optional[int]): The expected exit code of the container. Default is None.
+        require_logs (bool): A flag indicating if logs are required. Default is False.
+        require_no_error (bool): A flag indicating if no error is expected. Default is False.
 
         Returns:
-            bool: True if the container ran successfully based on the specified criteria,
-            otherwise False.
+        bool: True if the container meets the specified requirements, otherwise False.
+
+        Raises:
+        NotImplementedError: This is an abstract method and should be implemented in
+        a subclass.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def find_log_error_code(self, container_name: str, last_n_log_lines: int = 10) -> Optional[int]:
+        """
+        Finds the most relevant error code from the logs of the specified container. This is an
+        abstract method and must be implemented by subclasses. The method retrieves the last specified
+        number of log lines from the container to analyze and identify the error code.
+
+        :param container_name: Name of the container for which logs should be accessed.
+        :type container_name: str
+        :param last_n_log_lines: Number of log lines to retrieve from the container's log output,
+            defaulting to 10.
+        :type last_n_log_lines: int
+        :raises NotImplementedError: Indicates that this method is abstract and needs to be
+            implemented in a subclass.
+        :return: An optional integer representing the error code found in the logs, or None if
+            no error code is detected.
+        :rtype: Optional[int]
         """
         raise NotImplementedError()

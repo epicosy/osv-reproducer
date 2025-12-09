@@ -27,6 +27,7 @@ handlers:
       libressl: "https://github.com/libressl/portable"
       openexr: "https://github.com/AcademySoftwareFoundation/openexr"
       ndpi: "https://github.com/ntop/nDPI"
+      wolfssl: "https://github.com/wolfssl/wolfssl"
   gcs:
     bucket_name: "clusterfuzz-builds"
 

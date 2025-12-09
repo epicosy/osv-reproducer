@@ -7,13 +7,12 @@ from pathlib import Path
 from cement import Handler
 from ast import literal_eval
 from typing import Dict, Optional, List
-
-from docker.models.containers import Container
 from docker.errors import DockerException, APIError
 
 from ..core.exc import DockerError
 from ..handlers import HandlersInterface
 from ..core.interfaces import DockerInterface
+from ..utils.parse.log import find_make_error
 
 
 class DockerHandler(DockerInterface, HandlersInterface, Handler):
@@ -36,7 +35,7 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
     def build_image(
             self, context_path: Path, tag: str, build_args: Optional[Dict[str, str]] = None,
             remove_containers: bool = True, **kwargs
-    ) -> str:
+    ) -> Optional[str]:
         """
         Build a Docker image.
 
@@ -81,7 +80,8 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
             return image.id
         except (DockerException, APIError) as e:
             self.app.log.error(f"Failed to build Docker image {tag}: {str(e)}")
-            raise DockerError(f"Failed to build Docker image {tag}: {str(e)}")
+
+        return None
 
     def check_image_exists(self, image_name: str) -> Optional[str]:
         if self.client.images.list(name=image_name):
@@ -91,19 +91,36 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
 
         return None
 
-    def check_container_exists(self, container_name: str) -> Optional[Container]:
+    def remove_container(self, container_name: str) -> bool:
+        try:
+            container = self.client.containers.get(container_name)
+            container.remove(force=True)
+            self.app.log.info(f"Container {container_name} removed successfully")
+            return True
+        except docker.errors.NotFound:
+            self.app.log.warning(f"Container {container_name} not found")
+
+        return False
+
+    def check_container_exists(self, container_name: str) -> Optional[str]:
         existing_containers = self.client.containers.list(all=True, filters={"name": container_name})
 
         for container in existing_containers:
             if container.name == container_name:
                 self.app.log.info(f"Container {container_name} already exists with ID {container.id}")
-                return container
+                return container_name
 
         self.app.log.warning(f"Container {container_name} not found")
 
         return None
 
-    def check_container_exit_status(self, container: Container, exit_code: int = 0) -> bool:
+    def check_container_exit_status(self, container_name: str, exit_code: int = 0) -> bool:
+        try:
+            container = self.client.containers.get(container_name)
+        except docker.errors.NotFound:
+            self.app.log.warning(f"Container {container_name} not found")
+            return False
+
         container.reload()  # Refresh container data
 
         if container.attrs['State']['Status'] == 'exited':
@@ -124,7 +141,7 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
             environment: Optional[Dict[str, str]] = None, volumes: Optional[Dict[str, Dict[str, str]]] = None,
             platform: str = 'linux/amd64', privileged: bool = True, shm_size: str = '2g', detach: bool = True,
             tty: bool = False, stdin_open: bool = True, remove: bool = False,
-    ) -> Container:
+    ) -> Optional[str]:
         try:
             self.app.log.info(f"Running container {container_name} with image {image} on command {command}")
 
@@ -144,17 +161,22 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
                 remove=remove
             )
 
-            if not container:
-                raise ValueError(f"Container {container_name} failed")
-
-            self.app.log.info(f"Successfully started container {container_name} with ID {container.id}")
+            if container:
+                self.app.log.info(f"Successfully started container {container_name} with ID {container.id}")
 
             return container
-        except Exception as e:
+        except DockerException as e:
             self.app.log.error(f"Failed to run container {container_name}: {str(e)}")
-            raise DockerError(f"Failed to run container {container_name}: {str(e)}")
 
-    def stream_container_logs(self, container: Container) -> List[str]:
+        return None
+
+    def stream_container_logs(self, container_name: str) -> List[str]:
+        try:
+            container = self.client.containers.get(container_name)
+        except docker.errors.NotFound:
+            self.app.log.warning(f"Container {container_name} not found")
+            return []
+
         self.app.log.info(f"Streaming logs for container {container.name}:")
 
         logs = []
@@ -168,8 +190,11 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
 
         return logs
 
-    def check_container_exit_code(self, container: Container) -> Optional[int]:
-        if not container:
+    def check_container_exit_code(self, container_name: str) -> Optional[int]:
+        try:
+            container = self.client.containers.get(container_name)
+        except docker.errors.NotFound:
+            self.app.log.warning(f"Container {container_name} not found")
             return None
 
         container.reload()  # Refresh container data
@@ -183,10 +208,13 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
         return exit_code
 
     def container_ran(
-            self, container: Container, expected_exit_code: Optional[int] = None, require_logs: bool = False,
+            self, container_name: str, expected_exit_code: Optional[int] = None, require_logs: bool = False,
             require_no_error: bool = False
     ) -> bool:
-        if not container:
+        try:
+            container = self.client.containers.get(container_name)
+        except docker.errors.NotFound:
+            self.app.log.warning(f"Container {container_name} not found")
             return False
 
         state = container.attrs.get("State", {})
@@ -225,3 +253,20 @@ class DockerHandler(DockerInterface, HandlersInterface, Handler):
 
         # If we get here, the container ran at least once
         return True
+
+    def find_log_error_code(self, container_name: str, last_n_log_lines: int = 10) -> Optional[int]:
+        try:
+            container = self.client.containers.get(container_name)
+        except docker.errors.NotFound:
+            self.app.log.warning(f"Container {container_name} not found")
+            return None
+
+        logs = container.logs(tail=last_n_log_lines).decode("utf-8").strip().split("\n")
+
+        # if there is an error in the build process, we should find it at the end of the logs
+        error_code = find_make_error(logs)
+
+        if error_code:
+            self.app.log.warning(f"Previous build failed with error code {error_code}")
+
+        return error_code

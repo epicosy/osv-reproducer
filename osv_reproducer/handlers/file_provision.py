@@ -2,7 +2,7 @@ import json
 
 from pathlib import Path
 from cement import Handler
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 # TODO: use domain models instead of OSV directly
 from osvutils.types.osv import OSV
@@ -399,3 +399,20 @@ class FileProvisionHandler(FileProvisionInterface, HandlersInterface, Handler):
             f.write(crash_info_json_str)
 
         return crash_info_file
+
+    def load_runner_logs(self, osv_id: str, mode: str) -> Optional[List[str]]:
+        log_file = self.outputs_path / mode / osv_id / "runner.log"
+
+        if log_file.exists():
+            with log_file.open(mode="r") as f:
+                return f.readlines()
+
+        return None
+
+    def save_runner_logs(self, osv_id: str, mode: str, logs: List[str]):
+        log_file = self.outputs_path / mode / osv_id / "runner.log"
+
+        with log_file.open(mode="w") as f:
+            f.writelines(logs)
+
+        return log_file

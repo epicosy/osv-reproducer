@@ -1,6 +1,6 @@
 from pathlib import Path
-from typing import Optional, Dict
 from abc import ABC, abstractmethod
+from typing import Optional, Dict, List
 
 from osvutils.types.osv import OSV
 from ..common.enums import ReproductionMode
@@ -567,5 +567,47 @@ class FileProvisionInterface(ABC):
         Returns:
             An optional Path object representing the file path where crash information
             is saved, or None if saving was not successful.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def load_runner_logs(self, osv_id: str, mode: str) -> Optional[List[str]]:
+        """
+        This method is an abstract method that must be overridden in subclasses to load
+        runner logs based on the provided osv_id and mode. It is designed as part of an
+        interface or abstract base class for handling runner log retrieval logic. If not
+        overridden, it will raise a `NotImplementedError`.
+
+        Args:
+            osv_id (str): The unique identifier for the operational service view (OSV).
+            mode (str): The mode in which the logs are to be retrieved. Possible mode
+                values depend on the implementation of subclasses.
+
+        Returns:
+            Optional[List[str]]: A list of runner log entries if found, otherwise None.
+
+        Raises:
+            NotImplementedError: If this method is called on the base class without an
+                appropriate override in a subclass.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def save_runner_logs(self, osv_id: str, mode: str, logs: List[str]):
+        """
+        Abstract method for saving runner logs associated with a specific operation or
+        process. This method must be implemented by subclasses, ensuring that the logs
+        are saved for a particular osv_id and mode.
+
+        Args:
+            osv_id: The identifier of the operation or process for which logs are being
+                saved.
+            mode: The operational mode or context in which the logs are being saved.
+            logs: A list of log messages or entries associated with the specified
+                operation and mode.
+
+        Raises:
+            NotImplementedError: If the subclass does not implement this method.
+
         """
         raise NotImplementedError()

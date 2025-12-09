@@ -5,7 +5,7 @@ from cement.utils.version import get_version_banner
 from ..core.version import get_version
 from ..core.common.enums import ReproductionMode
 from ..utils.parse.arguments import parse_key_value_string
-from ..services import ContextService, BuilderService, RunnerService, ReproducerService
+from ..services import ContextService, BuilderService, RunnerService, ReproducerService, VerifierService
 
 
 VERSION_BANNER = """
@@ -69,9 +69,12 @@ class Base(Controller):
             runner_service = RunnerService(
                 file_provision_handler=file_provision_handler, docker_handler=docker_handler
             )
-
+            verifier_service = VerifierService(
+                file_provision_handler=file_provision_handler
+            )
             self.reproducer_service = ReproducerService(
-                context_service=context_service, builder_service=builder_service, runner_service=runner_service
+                context_service=context_service, builder_service=builder_service, runner_service=runner_service,
+                verifier_service=verifier_service
             )
 
     def _default(self):

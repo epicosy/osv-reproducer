@@ -173,9 +173,12 @@ class ContextService:
             ):
                 raise ContextError(f"Could not clone repository {_values['url']} at commit {_values['rev']}")
 
+        if not repositories:
+            raise ContextError("No valid repositories found in the snapshot")
+
         return repositories
 
-    def __call__(self, osv_id: str, mode: ReproductionMode) -> ReproductionContext:
+    def __call__(self, osv_id: str, mode: ReproductionMode):
         context = self.file_provision_handler.load_context(osv_id, mode)
 
         if context:
@@ -248,4 +251,4 @@ class ContextService:
 
         self.file_provision_handler.save_context(context)
 
-        return context
+        return True
