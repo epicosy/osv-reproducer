@@ -24,9 +24,13 @@ handlers:
   github:
     token: "<YOUR_TOKEN_HERE>"
     project_repo_mappings:
-      libressl: "https://github.com/libressl/portable"
-      openexr: "https://github.com/AcademySoftwareFoundation/openexr"
       ndpi: "https://github.com/ntop/nDPI"
+      libressl: "https://github.com/libressl/portable"
+      leptonica: "https://github.com/DanBloomberg/leptonica"
+      openexr: "https://github.com/AcademySoftwareFoundation/openexr"
+      openvswitch: "https://github.com/openvswitch/ovs"
+      qpdf: "https://github.com/qpdf/qpdf"
+      unicorn: "https://github.com/unicorn-engine/unicorn"
       wolfssl: "https://github.com/wolfssl/wolfssl"
   gcs:
     bucket_name: "clusterfuzz-builds"

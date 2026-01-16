@@ -45,7 +45,7 @@ class RunnerService:
             'HELPER': 'True',
             'ARCHITECTURE': context.issue_report.architecture,
             'RUN_FUZZER_MODE': 'interactive',  # to store the output from the fuzzer
-            'SANITIZER': context.issue_report.sanitizer
+            'SANITIZER': context.issue_report.sanitizer,
         }
 
         # Volumes to mount
@@ -58,7 +58,7 @@ class RunnerService:
         if not self.docker_handler.run_container(
             image='gcr.io/oss-fuzz-base/base-runner:latest',
             container_name=context.runner_container_name,
-            command=['reproduce', context.issue_report.fuzz_target, '-runs=100'],
+            command=['reproduce', context.issue_report.fuzz_target, '-runs=1'],
             platform='linux/arm64' if context.issue_report.architecture == 'aarch64' else 'linux/amd64',
             environment=environment,
             volumes=volumes,
@@ -76,7 +76,9 @@ class RunnerService:
         ):
             raise RunnerError(f"Container {context.runner_container_name} did not run successfully")
 
-        self.file_provision_handler.save_runner_logs(osv_id=context.id, mode=context.mode.value, logs=logs)
+        self.file_provision_handler.save_runner_logs(
+            osv_id=context.id, mode=context.mode.value, logs=[l + '\n' for l in logs]
+        )
 
         # Check container exit code
         exit_code = self.docker_handler.check_container_exit_code(context.runner_container_name)

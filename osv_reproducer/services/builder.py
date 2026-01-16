@@ -27,13 +27,14 @@ class BuilderService:
         return image_tag
 
     def _build_project_fuzzer_container(
-            self, context: ReproductionContext, image_name: str, repositories: dict, extra_args: dict = None
+            self, context: ReproductionContext, image_name: str, repositories: dict, extra_args: dict = None,
+            reproduce: bool = False
     ) -> str:
         platform = 'linux/arm64' if context.issue_report.architecture == 'aarch64' else 'linux/amd64'
 
         # Environment variables for the container
         environment = {
-            'FUZZING_ENGINE': context.issue_report.fuzzing_engine.lower(),
+            'FUZZING_ENGINE': 'libfuzzer' if reproduce else context.issue_report.fuzzing_engine.lower(),
             'FUZZING_LANGUAGE': context.project_info.language,
             'SANITIZER': context.issue_report.sanitizer,
             'ARCHITECTURE': context.issue_report.architecture,
@@ -44,7 +45,7 @@ class BuilderService:
         if extra_args:
             environment.update(extra_args)
 
-        output_dir = self.file_provision_handler.get_output_path(context.id, context.mode.value)
+        output_dir = self.file_provision_handler.get_output_path(context.id, context.mode.value, mkdir=True)
 
         # Volumes to mount
         volumes = {
@@ -62,6 +63,17 @@ class BuilderService:
 
             print(f"Mounting {local_dir} to {key}")
             volumes[str(local_dir)] = {'bind': key, 'mode': 'rw'}
+
+        for project_file, mount_file in context.mount_files.items():
+            local_file = self.file_provision_handler.get_project_file_path(
+                context.project_info.name, context.project_info.oss_fuzz_repo_sha, project_file
+            )
+
+            if not local_file:
+                raise BuilderError(f"Project file {project_file} not found in the file provisioner")
+
+            print(f"Mounting {local_file} to {mount_file}")
+            volumes[str(local_file)] = {'bind': mount_file, 'mode': 'ro'}
 
         # Run the container
         if not self.docker_handler.run_container(
@@ -89,7 +101,7 @@ class BuilderService:
 
         return context.fuzzer_container_name
 
-    def __call__(self, osv_id: str, mode: ReproductionMode, build_extra_args: dict):
+    def __call__(self, osv_id: str, mode: ReproductionMode, build_extra_args: dict, reproduce: bool = False):
         context = self.file_provision_handler.load_context(osv_id, mode)
 
         if not context:
@@ -111,7 +123,8 @@ class BuilderService:
             self.docker_handler.remove_container(context.fuzzer_container_name)
 
         self._build_project_fuzzer_container(
-            context, image_name=base_image_tag, repositories=context.repositories, extra_args=build_extra_args
+            context, image_name=base_image_tag, repositories=context.repositories, extra_args=build_extra_args,
+            reproduce=reproduce
         )
 
         return True

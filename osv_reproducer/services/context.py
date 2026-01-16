@@ -182,7 +182,7 @@ class ContextService:
         context = self.file_provision_handler.load_context(osv_id, mode)
 
         if context:
-            return context
+            return True
 
         osv_record = self._get_osv_record(osv_id)
         # TODO: find a way to select the correct project if there are multiple

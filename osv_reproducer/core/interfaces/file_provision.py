@@ -70,7 +70,7 @@ class FileProvisionInterface(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_output_path(self, osv_id: str, mode: str, file_name: str = None) -> Optional[Path]:
+    def get_output_path(self, osv_id: str, mode: str, file_name: str = None, mkdir: bool = False) -> Optional[Path]:
         """
         Gets the output path based on the provided ID, operational mode, and optional file name.
 
@@ -82,6 +82,7 @@ class FileProvisionInterface(ABC):
             osv_id (str): The unique identifier for the resource.
             mode (str): The operational mode which influences the directory or file structure.
             file_name (Optional[str]): An optional name for the file to be included in the path.
+            mkdir (bool): A flag indicating whether to create the directory if it doesn't exist.
 
         Returns:
             Optional[Path]: The constructed file path if applicable, otherwise None.

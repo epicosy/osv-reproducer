@@ -86,11 +86,18 @@ class Base(Controller):
         build_args = parse_key_value_string(self.app.pargs.build_extra_args)
 
         self.app.log.info(f"Starting reproduction of crash for {self.app.pargs.osv_id}")
+
         run_status = self.reproducer_service(
             osv_id=self.app.pargs.osv_id,
             mode=ReproductionMode.CRASH,
             build_extra_args=build_args,
+            reproduce=True
         )
+
+        self.app.log.info(str(run_status))
+
+        if run_status.error:
+            self.app.log.error(run_status.error)
 
         # TODO: maybe should add a flag
         if run_status.exit_code is not None:

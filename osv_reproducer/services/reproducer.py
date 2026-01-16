@@ -20,12 +20,14 @@ class ReproducerService:
         self._runner = runner_service
         self._verifier = verifier_service
 
-    def __call__(self, osv_id: str, mode: ReproductionMode, build_extra_args: dict = None) -> RunStatus:
+    def __call__(
+            self, osv_id: str, mode: ReproductionMode, build_extra_args: dict = None, reproduce: bool = False
+    ) -> RunStatus:
         run_status = RunStatus()
 
         try:
             run_status.context_ok = self._context(osv_id, mode)
-            run_status.builder_ok = self._builder(osv_id, mode, build_extra_args)
+            run_status.builder_ok = self._builder(osv_id, mode, build_extra_args, reproduce=reproduce)
             run_status.runner_ok = self._runner(osv_id, mode)
             run_status.verifier_ok = self._verifier(osv_id, mode)
         except ContextError as e:

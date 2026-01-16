@@ -226,8 +226,11 @@ class FileProvisionHandler(FileProvisionInterface, HandlersInterface, Handler):
 
         return None
 
-    def get_output_path(self, osv_id: str, mode: str, file_name: str = None) -> Optional[Path]:
+    def get_output_path(self, osv_id: str, mode: str, file_name: str = None, mkdir: bool = False) -> Optional[Path]:
         output_path = self.outputs_path / mode / osv_id
+
+        if mkdir:
+            output_path.mkdir(parents=True, exist_ok=True)
 
         if file_name:
             output_file = output_path / file_name

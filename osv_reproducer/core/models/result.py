@@ -18,3 +18,6 @@ class RunStatus(BaseModel):
     verifier_ok: bool = False
     exit_code: Optional[int] = None
     error: str = None
+
+    def __str__(self):
+        return f"Context OK: {self.context_ok}\nBuilder OK: {self.builder_ok}\nRunner OK: {self.runner_ok}\nVerifier OK: {self.verifier_ok}"
